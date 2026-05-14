@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Feeling - 匿名分享广场</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #0f0f0f;
+      color: #e5e5e5;
+    }
+    .post-card {
+      background-color: #1a1a1a;
+      border: 1px solid #2a2a2a;
+    }
+    .btn-primary {
+      background-color: #6366f1;
+      hover:bg-indigo-600;
+    }
+    .input-field {
+      background-color: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      color: #e5e5e5;
+    }
+    .input-field:focus {
+      border-color: #6366f1;
+      outline: none;
+    }
+    .comment-section {
+      background-color: #141414;
+    }
+    .text-muted {
+      color: #888888;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <header class="sticky top-0 z-50 bg-[#0f0f0f]/95 backdrop-blur-sm border-b border-[#2a2a2a]">
+    <div class="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <i class="fa fa-heart text-pink-500 text-xl"></i>
+        <h1 class="text-xl font-bold">Your Feeling</h1>
+      </div>
+      <button onclick="showCreatePost()" class="flex items-center space-x-1 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg transition-colors">
+        <i class="fa fa-pencil"></i>
+        <span>分享</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto px-4 py-6">
+    <div id="posts-container" class="space-y-4"></div>
+    <div id="loading" class="text-center py-8 text-gray-500">
+      <i class="fa fa-spinner fa-spin text-xl"></i>
+      <p class="mt-2">加载中...</p>
+    </div>
+  </main>
+
+  <div id="create-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden">
+    <div class="bg-[#1a1a1a] rounded-xl w-full max-w-lg mx-4 border border-[#2a2a2a]">
+      <div class="p-4 border-b border-[#2a2a2a] flex items-center justify-between">
+        <h2 class="text-lg font-semibold">分享你的心情</h2>
+        <button onclick="closeCreatePost()" class="text-gray-400 hover:text-white">
+          <i class="fa fa-times text-xl"></i>
+        </button>
+      </div>
+      <form id="post-form" enctype="multipart/form-data" class="p-4 space-y-4">
+        <textarea 
+          id="post-content" 
+          placeholder="说说你的想法..." 
+          class="input-field w-full p-3 rounded-lg resize-none"
+          rows="4"
+          required
+        ></textarea>
+        <div class="flex items-center space-x-2">
+          <label class="flex items-center space-x-2 cursor-pointer text-gray-400 hover:text-white">
+            <i class="fa fa-image"></i>
+            <span>图片</span>
+            <input type="file" id="post-image" accept="image/*" class="hidden">
+          </label>
+          <label class="flex items-center space-x-2 cursor-pointer text-gray-400 hover:text-white">
+            <i class="fa fa-link"></i>
+            <span>链接</span>
+            <input type="text" id="post-link" placeholder="输入链接" class="input-field px-3 py-1.5 rounded-lg text-sm w-48 hidden">
+          </label>
+        </div>
+        <div id="image-preview" class="hidden">
+          <img id="preview-img" class="max-h-40 rounded-lg">
+        </div>
+        <div class="flex justify-end space-x-2">
+          <button type="button" onclick="closeCreatePost()" class="px-4 py-2 text-gray-400 hover:text-white">取消</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg">发布</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '';
+
+    async function loadPosts() {
+      const response = await fetch(`${API_BASE}/api/posts`);
+      const posts = await response.json();
+      renderPosts(posts);
+    }
+
+    function renderPosts(posts) {
+      const container = document.getElementById('posts-container');
+      const loading = document.getElementById('loading');
+      loading.style.display = 'none';
+      
+      if (posts.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-gray-500"><i class="fa fa-inbox text-4xl mb-4"></i><p>还没有分享，快来做第一个吧！</p></div>';
+        return;
+      }
+
+      container.innerHTML = posts.map(post => `
+        <div class="post-card rounded-xl p-4">
+          <div class="flex items-start justify-between mb-3">
+            <div class="flex items-center space-x-2">
+              <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center">
+                <i class="fa fa-user text-white text-sm"></i>
+              </div>
+              <span class="text-sm text-gray-400">匿名用户</span>
+            </div>
+            <span class="text-xs text-gray-500">${formatTime(post.created_at)}</span>
+          </div>
+          <p class="text-gray-100 mb-3">${escapeHtml(post.content)}</p>
+          ${post.image_url ? `<img src="${post.image_url}" class="w-full rounded-lg mb-3 max-h-64 object-cover">` : ''}
+          ${post.link_url ? `<a href="${post.link_url}" target="_blank" class="text-indigo-400 hover:text-indigo-300 mb-3 block flex items-center space-x-1"><i class="fa fa-external-link"></i><span>${post.link_url}</span></a>` : ''}
+          <div class="flex items-center space-x-4 pt-3 border-t border-[#2a2a2a]">
+            <button onclick="toggleComments(${post.id})" class="flex items-center space-x-1 text-gray-400 hover:text-white">
+              <i class="fa fa-comment"></i>
+              <span>${post.comment_count || 0}</span>
+            </button>
+          </div>
+          <div id="comments-${post.id}" class="comment-section rounded-lg mt-3 p-3 hidden">
+            <div id="comments-list-${post.id}" class="space-y-2 mb-3"></div>
+            <form onsubmit="submitComment(event, ${post.id})" class="flex space-x-2">
+              <input type="text" placeholder="写下你的评论..." class="input-field flex-1 px-3 py-2 rounded-lg text-sm" required>
+              <button type="submit" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm">发送</button>
+            </form>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function loadComments(postId) {
+      const response = await fetch(`${API_BASE}/api/posts/${postId}/comments`);
+      const comments = await response.json();
+      const list = document.getElementById(`comments-list-${postId}`);
+      
+      if (comments.length === 0) {
+        list.innerHTML = '<p class="text-sm text-gray-500 text-center py-2">暂无评论</p>';
+        return;
+      }
+
+      list.innerHTML = comments.map(comment => `
+        <div class="flex items-start space-x-2">
+          <div class="w-6 h-6 rounded-full bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center flex-shrink-0">
+            <i class="fa fa-user text-white text-xs"></i>
+          </div>
+          <div class="flex-1">
+            <p class="text-sm text-gray-300">${escapeHtml(comment.content)}</p>
+            <span class="text-xs text-gray-500">${formatTime(comment.created_at)}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleComments(postId) {
+      const section = document.getElementById(`comments-${postId}`);
+      if (section.style.display === 'none' || section.style.display === '') {
+        section.style.display = 'block';
+        loadComments(postId);
+      } else {
+        section.style.display = 'none';
+      }
+    }
+
+    async function submitComment(event, postId) {
+      event.preventDefault();
+      const input = event.target.querySelector('input');
+      const content = input.value.trim();
+      
+      if (!content) return;
+
+      const response = await fetch(`${API_BASE}/api/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      });
+
+      if (response.ok) {
+        input.value = '';
+        loadComments(postId);
+      } else {
+        const data = await response.json();
+        alert(data.error || '评论失败');
+      }
+    }
+
+    function showCreatePost() {
+      document.getElementById('create-modal').style.display = 'flex';
+      document.getElementById('post-content').focus();
+    }
+
+    function closeCreatePost() {
+      document.getElementById('create-modal').style.display = 'none';
+      document.getElementById('post-form').reset();
+      document.getElementById('image-preview').style.display = 'none';
+    }
+
+    document.getElementById('post-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      
+      const formData = new FormData();
+      formData.append('content', document.getElementById('post-content').value);
+      formData.append('link_url', document.getElementById('post-link').value);
+      
+      const fileInput = document.getElementById('post-image');
+      if (fileInput.files.length > 0) {
+        formData.append('image', fileInput.files[0]);
+      }
+
+      const response = await fetch(`${API_BASE}/api/posts`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (response.ok) {
+        closeCreatePost();
+        loadPosts();
+      } else {
+        const data = await response.json();
+        alert(data.error || '发布失败');
+      }
+    });
+
+    document.querySelector('label[for="post-image"]').addEventListener('click', () => {
+      document.getElementById('post-image').click();
+    });
+
+    document.getElementById('post-image').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          document.getElementById('preview-img').src = event.target.result;
+          document.getElementById('image-preview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    document.querySelector('label[for="post-link"]').addEventListener('click', () => {
+      const linkInput = document.getElementById('post-link');
+      linkInput.style.display = linkInput.style.display === 'none' ? 'block' : 'none';
+    });
+
+    function formatTime(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diff = now - date;
+      
+      if (diff < 60000) return '刚刚';
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
+      return date.toLocaleDateString('zh-CN');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    document.addEventListener('DOMContentLoaded', loadPosts);
+  </script>
+</body>
+</html>
