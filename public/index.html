@@ -75,6 +75,7 @@
           <option value="tired">😫 疲惫</option>
           <option value="excited">🤩 兴奋</option>
         </select>
+        <button class="nav-btn" id="drift-btn" onclick="openDrift()" aria-label="漂流瓶·随机看一条心声" title="漂流瓶 · 随机看一条"><i class="fa fa-life-ring" aria-hidden="true"></i></button>
         <button class="nav-btn" id="bookmarks-btn" onclick="toggleBookmarksView()" aria-label="我的收藏" title="我的收藏"><i class="fa fa-bookmark" aria-hidden="true"></i></button>
         <button class="nav-btn" id="admin-btn" onclick="openAdminModal()" aria-label="管理面板" title="管理面板"><i class="fa fa-shield" aria-hidden="true"></i></button>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换深色/浅色主题" title="切换主题"><i class="fa fa-moon-o" id="theme-icon" aria-hidden="true"></i></button>
@@ -219,6 +220,19 @@
           <i class="fa fa-paper-plane"></i><span>发布</span>
         </button>
       </form>
+    </div>
+  </div>
+
+  <!-- 漂流瓶浮层 -->
+  <div id="drift-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="漂流瓶">
+    <div class="modal-content drift-content">
+      <div class="modal-header">
+        <span class="modal-title"><i class="fa fa-life-ring" style="color: var(--accent-blue); margin-right: 8px;" aria-hidden="true"></i>漂流瓶</span>
+        <button class="modal-close" onclick="closeDrift()" aria-label="关闭"><i class="fa fa-times" aria-hidden="true"></i></button>
+      </div>
+      <p class="drift-hint">从茫茫心声里，随机捞起一个陌生人的瞬间——</p>
+      <div id="drift-body" class="drift-body"></div>
+      <button class="btn-primary drift-again" onclick="drawDrift()"><i class="fa fa-random" aria-hidden="true"></i> 再捞一个</button>
     </div>
   </div>
 

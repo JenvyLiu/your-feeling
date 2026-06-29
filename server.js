@@ -1164,6 +1164,67 @@ app.get("/api/posts/random", (req, res) => {
   });
 });
 
+// 漂流瓶：随机一条活跃帖（不要求点赞数，可 exclude 上一条避免连续重复）
+app.get("/api/posts/drift", (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const exclude = parseInt(req.query.exclude);
+  const hasExclude = !isNaN(exclude) && exclude > 0;
+  const excl = hasExclude ? " AND p.id != ?" : "";
+  const params = hasExclude ? [exclude] : [];
+  db.get(
+    `SELECT COUNT(*) AS cnt FROM posts p WHERE p.is_hidden = 0 AND (p.expires_at IS NULL OR p.expires_at > datetime('now'))${excl}`,
+    params,
+    (err, countRow) => {
+      if (err) { logger.error("漂流瓶计数失败: " + err.message); return res.status(500).json({ error: "捞取失败" }); }
+      const cnt = countRow ? countRow.cnt : 0;
+      if (cnt === 0) return res.json(null);
+      const offset = Math.floor(Math.random() * cnt);
+      db.get(
+        `SELECT p.*, COUNT(c.id) AS comment_count
+         FROM posts p LEFT JOIN comments c ON p.id = c.post_id
+         WHERE p.is_hidden = 0 AND (p.expires_at IS NULL OR p.expires_at > datetime('now'))${excl}
+         GROUP BY p.id LIMIT 1 OFFSET ?`,
+        params.concat([offset]),
+        (err2, row) => {
+          if (err2) { logger.error("漂流瓶查询失败: " + err2.message); return res.status(500).json({ error: "捞取失败" }); }
+          res.json(row || null);
+        }
+      );
+    }
+  );
+});
+
+// 相似心声推荐：同 mood 或标签交集（标签在应用层精确比对，避免 LIKE 子串误命中）
+app.get("/api/posts/:id/similar", (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const postId = parseInt(req.params.id);
+  if (isNaN(postId) || postId <= 0) return res.status(400).json({ error: "无效的帖子ID" });
+  db.get("SELECT id, mood, tags FROM posts WHERE id = ?", [postId], (err, target) => {
+    if (err) { logger.error("查询相似目标失败: " + err.message); return res.status(500).json({ error: "查询失败" }); }
+    if (!target) return res.json([]);
+    const targetTags = String(target.tags || "").split(/[,，]/).map(t => t.trim()).filter(Boolean);
+    db.all(
+      `SELECT id, content, mood, tags, like_count FROM posts
+       WHERE is_hidden = 0 AND (expires_at IS NULL OR expires_at > datetime('now')) AND id != ?
+       ORDER BY created_at DESC LIMIT 200`,
+      [postId],
+      (err2, rows) => {
+        if (err2) { logger.error("查询相似候选失败: " + err2.message); return res.status(500).json({ error: "查询失败" }); }
+        const scored = (rows || []).map(r => {
+          const rTags = String(r.tags || "").split(/[,，]/).map(t => t.trim()).filter(Boolean);
+          const overlap = rTags.filter(t => targetTags.indexOf(t) !== -1).length;
+          const moodMatch = (target.mood && r.mood === target.mood) ? 1 : 0;
+          return { r: r, score: overlap * 2 + moodMatch };
+        }).filter(x => x.score > 0)
+          .sort((a, b) => (b.score - a.score) || ((b.r.like_count || 0) - (a.r.like_count || 0)))
+          .slice(0, 5)
+          .map(x => ({ id: x.r.id, content: x.r.content, mood: x.r.mood }));
+        res.json(scored);
+      }
+    );
+  });
+});
+
 // 获取单个帖子
 app.get("/api/posts/:id", (req, res) => {
   if (!dbReady) {

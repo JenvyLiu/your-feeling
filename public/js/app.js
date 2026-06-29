@@ -65,6 +65,9 @@
           case 'react':
             if (id) toggleReaction(id, target.getAttribute('data-type'));
             break;
+          case 'goto-post':
+            if (id) gotoPost(id);
+            break;
           case 'random-nickname':
             if (id) generateRandomNickname(id);
             break;
@@ -290,6 +293,53 @@
       }
     }
 
+    // ============ 漂流瓶 ============
+    var driftLastId = null;
+    function openDrift() {
+      var modal = document.getElementById('drift-modal');
+      modal.classList.add('active');
+      document.body.classList.add('modal-open');
+      drawDrift();
+    }
+    function closeDrift() {
+      document.getElementById('drift-modal').classList.remove('active');
+      document.body.classList.remove('modal-open');
+    }
+    async function drawDrift() {
+      var body = document.getElementById('drift-body');
+      body.innerHTML = '<p class="drift-loading"><i class="fa fa-spinner fa-spin"></i> 正在打捞...</p>';
+      try {
+        var url = API_BASE + '/api/posts/drift' + (driftLastId ? ('?exclude=' + driftLastId) : '');
+        var post = await stableFetch(url);
+        if (!post || !post.content) {
+          body.innerHTML = '<p class="drift-empty">海面很安静，还没有漂流瓶。来发布第一条吧～</p>';
+          return;
+        }
+        driftLastId = post.id;
+        body.innerHTML = '';
+        var card = document.createElement('div');
+        card.className = 'drift-card';
+        if (post.mood && moodMap[post.mood]) {
+          var moodEl = document.createElement('div');
+          moodEl.className = 'drift-mood';
+          moodEl.style.color = moodMap[post.mood].color;
+          moodEl.innerHTML = '<i class="fa ' + moodMap[post.mood].icon + '"></i> ' + moodMap[post.mood].label;
+          card.appendChild(moodEl);
+        }
+        var content = document.createElement('div');
+        content.className = 'drift-text';
+        content.textContent = post.content;
+        card.appendChild(content);
+        var meta = document.createElement('div');
+        meta.className = 'drift-meta';
+        meta.textContent = '❤ ' + (post.like_count || 0) + '    💬 ' + (post.comment_count || 0);
+        card.appendChild(meta);
+        body.appendChild(card);
+      } catch (err) {
+        body.innerHTML = '<p class="drift-empty">打捞失败，再试一次吧</p>';
+      }
+    }
+
     // ============ 帖子渲染 ============
     function renderPost(post) {
       var isLiked = likedPosts.has(post.id);
@@ -366,6 +416,9 @@
       html += '<div id="comments-expand-' + post.id + '" style="display: none;"></div>';
       html += '</div>';
       html += '<div id="comments-list-' + post.id + '"></div>';
+
+      // 相似心声推荐
+      html += '<div id="similar-' + post.id + '" class="similar-section"></div>';
 
       // 回复信息
       html += '<div id="comment-reply-info-' + post.id + '" class="comment-reply-info" style="display: none; font-size: 0.8rem; color: var(--accent-purple); margin-bottom: 4px;"></div>';
@@ -1299,8 +1352,47 @@
       if (div.style.display === 'none') {
         div.style.display = '';
         loadComments(postId);
+        loadSimilar(postId);
       } else {
         div.style.display = 'none';
+      }
+    }
+
+    // 相似心声推荐：展开评论时加载，只读预览，点击滚动到对应帖子（若在当前列表）
+    var similarLoaded = {};
+    async function loadSimilar(postId) {
+      if (similarLoaded[postId]) return;
+      similarLoaded[postId] = true;
+      var box = document.getElementById('similar-' + postId);
+      if (!box) return;
+      try {
+        var list = await stableFetch(API_BASE + '/api/posts/' + postId + '/similar');
+        if (!list || !list.length) return;
+        box.innerHTML = '';
+        var title = document.createElement('div');
+        title.className = 'similar-title';
+        title.innerHTML = '<i class="fa fa-heart" aria-hidden="true"></i> 你可能也有共鸣';
+        box.appendChild(title);
+        list.forEach(function(p) {
+          var item = document.createElement('div');
+          item.className = 'similar-item';
+          var em = (p.mood && moodMap[p.mood]) ? (moodMap[p.mood].label + ' · ') : '';
+          var snippet = String(p.content || '').replace(/\s+/g, ' ').slice(0, 40);
+          item.textContent = em + snippet + (String(p.content || '').length > 40 ? '…' : '');
+          item.setAttribute('data-action', 'goto-post');
+          item.setAttribute('data-id', p.id);
+          box.appendChild(item);
+        });
+      } catch (err) { similarLoaded[postId] = false; }
+    }
+    function gotoPost(id) {
+      var el = document.getElementById('post-' + id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('post-flash');
+        setTimeout(function() { el.classList.remove('post-flash'); }, 1500);
+      } else {
+        showToast('这条心声不在当前列表里', 'info');
       }
     }
 
