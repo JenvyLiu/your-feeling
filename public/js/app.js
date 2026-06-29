@@ -1142,6 +1142,18 @@
       }
     }
 
+    // 帖内匿名动物头像：由后端 author_seed 确定性映射，同帖同人一致、跨帖不可追踪
+    var avatarAnimals = ['🐱','🐶','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🦉','🦄','🐙','🐢','🐳','🐬','🦋','🐝','🐞','🦔','🦅','🦌','🐺','🐹','🦝'];
+    var avatarColors = ['#f59e0b','#3b82f6','#ef4444','#8b5cf6','#22c55e','#ec4899','#f97316','#14b8a6','#a78bfa','#fb923c','#34d399','#60a5fa'];
+    function hashSeed(s) { var h = 0; s = String(s || ''); for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; } return Math.abs(h); }
+    function seedToAvatar(seed) {
+      if (!seed) return { emoji: '👤', color: '#64748b' };
+      var s = String(seed);
+      var a = parseInt(s.substring(0, 6), 16); if (isNaN(a)) a = hashSeed(s);
+      var b = parseInt(s.substring(6, 12), 16); if (isNaN(b)) b = (a >> 2) + 7;
+      return { emoji: avatarAnimals[a % avatarAnimals.length], color: avatarColors[b % avatarColors.length] };
+    }
+
     function renderCommentItem(comment, postId, depth) {
       var indentClass = '';
       if (depth === 1) indentClass = 'comment-reply';
@@ -1151,7 +1163,8 @@
       var isLiked = likedComments.has(comment.id);
 
       var html = '<div class="comment-item ' + indentClass + ' flex items-start gap-3 py-2" id="comment-' + comment.id + '">';
-      html += '<div class="avatar avatar-sm"><i class="fa fa-user text-white" style="font-size:10px"></i></div>';
+      var av = seedToAvatar(comment.author_seed);
+      html += '<div class="avatar avatar-sm" style="background:' + av.color + ';font-size:13px" title="该帖内的匿名身份">' + av.emoji + '</div>';
       html += '<div class="flex-1 rounded-xl p-3" style="background: var(--comment-item-bg);">';
       html += '<div class="flex items-center gap-2 mb-1">';
       html += '<span class="text-sm font-medium comment-nickname" style="color: var(--text-gray-300);"></span>';
@@ -1300,7 +1313,7 @@
       btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
 
       try {
-        var body = { content: content };
+        var body = { content: content, fingerprint: userFingerprint };
         if (nickname) body.nickname = nickname;
         if (replyingTo && replyingTo.postId === postId) body.parent_id = replyingTo.commentId;
 

@@ -71,11 +71,23 @@ const TIMEOUT_MS = 15000;
 const DB_RETRY_MS = 5000;
 const MAX_DB_RETRIES = 3;
 
+// 帖内匿名头像派生密钥：未配置则每次启动随机生成（已存库的 author_seed 不受影响，故仍稳定）
+const AVATAR_SECRET = process.env.AVATAR_SECRET || crypto.randomBytes(16).toString("hex");
+
 // ============ 通用安全/工具函数 ============
 
 // LIKE 通配符转义（统一处理 \ % _）
 function escapeLike(str) {
   return String(str || "").replace(/[\\%_]/g, "\\$&");
+}
+
+// 帖内匿名头像 seed：HMAC(secret, postId:fingerprint)，同帖同人稳定、跨帖不可追踪、不可反推 fingerprint
+function deriveAuthorSeed(postId, fingerprint) {
+  if (!fingerprint) return crypto.randomBytes(6).toString("hex");
+  return crypto.createHmac("sha256", AVATAR_SECRET)
+    .update(String(postId) + ":" + String(fingerprint))
+    .digest("hex")
+    .substring(0, 12);
 }
 
 // 匿名化 IP（保留前两段用于粗略区分，不记录完整 IP）
@@ -424,6 +436,12 @@ function initDatabase(database) {
         database.run("ALTER TABLE comments ADD COLUMN like_count INTEGER DEFAULT 0", (err) => {
           if (err) logger.error("添加 like_count 列失败: " + err.message);
           else logger.info("已添加 comments.like_count 列");
+        });
+      }
+      if (!columnNames.includes('author_seed')) {
+        database.run("ALTER TABLE comments ADD COLUMN author_seed TEXT", (err) => {
+          if (err) logger.error("添加 author_seed 列失败: " + err.message);
+          else logger.info("已添加 comments.author_seed 列");
         });
       }
     });
@@ -1510,6 +1528,8 @@ app.post("/api/posts/:id/comments", rateLimit(60000, 20), (req, res) => {
   const content = req.body.content;
   const parentId = req.body.parent_id ? parseInt(req.body.parent_id) : null;
   const nickname = req.body.nickname ? req.body.nickname.trim().substring(0, 50) : null;
+  // 帖内匿名头像 seed（基于 postId + 评论者 fingerprint 派生）
+  const authorSeed = deriveAuthorSeed(postId, req.body.fingerprint);
 
   if (isNaN(postId) || postId <= 0) {
     return res.status(400).json({ error: "无效的帖子ID" });
@@ -1543,15 +1563,15 @@ app.post("/api/posts/:id/comments", rateLimit(60000, 20), (req, res) => {
         return res.status(400).json({ error: "回复的评论不属于该帖子" });
       }
 
-      insertComment(postId, filteredContent, parentId, nickname, res);
+      insertComment(postId, filteredContent, parentId, nickname, authorSeed, res);
     });
   } else {
-    insertComment(postId, filteredContent, null, nickname, res);
+    insertComment(postId, filteredContent, null, nickname, authorSeed, res);
   }
 });
 
 // 插入评论的通用方法
-function insertComment(postId, content, parentId, nickname, res) {
+function insertComment(postId, content, parentId, nickname, authorSeed, res) {
   db.get("SELECT id FROM posts WHERE id = ? AND is_hidden = 0", [postId], (err, post) => {
     if (err) {
       logger.error("检查帖子失败: " + err.message);
@@ -1562,8 +1582,8 @@ function insertComment(postId, content, parentId, nickname, res) {
     }
 
     db.run(
-      "INSERT INTO comments (post_id, content, parent_id, nickname) VALUES (?, ?, ?, ?)",
-      [postId, content, parentId, nickname],
+      "INSERT INTO comments (post_id, content, parent_id, nickname, author_seed) VALUES (?, ?, ?, ?, ?)",
+      [postId, content, parentId, nickname, authorSeed],
       function(err) {
         if (err) {
           logger.error("发表评论失败: " + err.message);
@@ -1574,7 +1594,8 @@ function insertComment(postId, content, parentId, nickname, res) {
           id: this.lastID,
           content: content,
           parent_id: parentId,
-          nickname: nickname
+          nickname: nickname,
+          author_seed: authorSeed
         });
       }
     );
