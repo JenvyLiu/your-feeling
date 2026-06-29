@@ -62,6 +62,9 @@
           case 'delete-post':
             if (id) deletePost(id);
             break;
+          case 'react':
+            if (id) toggleReaction(id, target.getAttribute('data-type'));
+            break;
           case 'random-nickname':
             if (id) generateRandomNickname(id);
             break;
@@ -236,6 +239,57 @@
       excited: { label: '兴奋', icon: 'fa-bolt', color: '#f97316' }
     };
 
+    // ============ 情绪共鸣反应 ============
+    var reactionMeta = [
+      { type: 'hug', emoji: '🤗', label: '抱抱' },
+      { type: 'resonate', emoji: '💗', label: '共鸣' },
+      { type: 'cheer', emoji: '💪', label: '加油' },
+      { type: 'understand', emoji: '🫶', label: '懂你' }
+    ];
+    function reactionsRowHtml(postId) {
+      var h = '<div class="post-reactions" id="reactions-' + postId + '">';
+      for (var i = 0; i < reactionMeta.length; i++) {
+        var m = reactionMeta[i];
+        h += '<button type="button" class="reaction-btn" data-action="react" data-id="' + postId + '" data-type="' + m.type + '" id="reaction-' + m.type + '-' + postId + '" aria-label="' + m.label + '">';
+        h += '<span class="reaction-emoji">' + m.emoji + '</span>';
+        h += '<span class="reaction-count" id="reaction-count-' + m.type + '-' + postId + '">0</span>';
+        h += '</button>';
+      }
+      h += '</div>';
+      return h;
+    }
+    function applyReactionState(postId, data) {
+      if (!data || !data.counts) return;
+      var mine = data.mine || [];
+      reactionMeta.forEach(function(m) {
+        var btn = document.getElementById('reaction-' + m.type + '-' + postId);
+        var cnt = document.getElementById('reaction-count-' + m.type + '-' + postId);
+        if (cnt) cnt.textContent = data.counts[m.type] || 0;
+        if (btn) {
+          if (mine.indexOf(m.type) !== -1) btn.classList.add('reacted');
+          else btn.classList.remove('reacted');
+        }
+      });
+    }
+    async function loadReactions(postId) {
+      try {
+        var data = await stableFetch(API_BASE + '/api/posts/' + postId + '/reactions?fingerprint=' + encodeURIComponent(userFingerprint));
+        applyReactionState(postId, data);
+      } catch (err) {}
+    }
+    async function toggleReaction(postId, type) {
+      try {
+        var data = await stableFetch(API_BASE + '/api/posts/' + postId + '/reactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fingerprint: userFingerprint, type: type })
+        });
+        applyReactionState(postId, data);
+      } catch (err) {
+        showToast(err.message || '操作失败', 'error');
+      }
+    }
+
     // ============ 帖子渲染 ============
     function renderPost(post) {
       var isLiked = likedPosts.has(post.id);
@@ -297,6 +351,9 @@
         html += '<button class="action-btn" aria-label="删除帖子" data-action="delete-post" data-id="' + post.id + '" style="color: var(--danger);"><i class="fa fa-trash"></i></button>';
       }
       html += '</div>';
+
+      // 情绪共鸣反应行
+      html += reactionsRowHtml(post.id);
 
       // 评论区:评论输入内的按钮也改用事件委托
       html += '<div id="comments-' + post.id + '" class="comments-section" style="display: none;">';
@@ -383,6 +440,7 @@
           postsHtml += renderPost(posts[i]);
           if (posts[i].is_bookmarked) bookmarkedPosts.add(posts[i].id);
           checkLikeStatus(posts[i].id);
+          loadReactions(posts[i].id);
         }
         if (postsHtml) {
           container.insertAdjacentHTML('beforeend', postsHtml);
@@ -580,6 +638,7 @@
           html += renderPost(posts[i]);
           if (posts[i].is_bookmarked) bookmarkedPosts.add(posts[i].id);
           checkLikeStatus(posts[i].id);
+          loadReactions(posts[i].id);
         }
         container.innerHTML = html;
         // 正文内容通过 textContent 注入,避免 XSS

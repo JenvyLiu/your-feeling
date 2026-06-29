@@ -474,6 +474,21 @@ function initDatabase(database) {
       if (err) logger.error("创建post_likes表失败: " + err.message);
     });
 
+    // post_reactions 表（情绪共鸣反应：抱抱/共鸣/加油/懂你；每人每帖每类型仅一次）
+    database.run(`
+      CREATE TABLE IF NOT EXISTS post_reactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        post_id INTEGER NOT NULL,
+        fingerprint TEXT NOT NULL,
+        reaction_type TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(post_id, fingerprint, reaction_type),
+        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+      )
+    `, (err) => {
+      if (err) logger.error("创建post_reactions表失败: " + err.message);
+    });
+
     // comment_likes 表
     database.run(`
       CREATE TABLE IF NOT EXISTS comment_likes (
@@ -554,6 +569,7 @@ function initDatabase(database) {
     database.run("CREATE INDEX IF NOT EXISTS idx_comment_likes ON comment_likes(comment_id)", (err) => {});
     database.run("CREATE INDEX IF NOT EXISTS idx_bookmarks_post ON bookmarks(post_id)", (err) => {});
     database.run("CREATE INDEX IF NOT EXISTS idx_bookmarks_fingerprint ON bookmarks(fingerprint)", (err) => {});
+    database.run("CREATE INDEX IF NOT EXISTS idx_reactions_post ON post_reactions(post_id)", (err) => {});
 
     logger.info("数据库初始化完成");
     dbReady = true;
@@ -1497,6 +1513,66 @@ app.get("/api/posts/:id/like", (req, res) => {
       res.json({ liked: !!row });
     }
   );
+});
+
+// ============ 情绪共鸣反应（抱抱/共鸣/加油/懂你） ============
+const VALID_REACTIONS = ["hug", "resonate", "cheer", "understand"];
+
+function buildReactionSummary(postId, fingerprint, cb) {
+  db.all("SELECT reaction_type, COUNT(*) AS c FROM post_reactions WHERE post_id = ? GROUP BY reaction_type", [postId], (err, rows) => {
+    if (err) return cb(err);
+    const counts = { hug: 0, resonate: 0, cheer: 0, understand: 0 };
+    (rows || []).forEach(r => { if (Object.prototype.hasOwnProperty.call(counts, r.reaction_type)) counts[r.reaction_type] = r.c; });
+    db.all("SELECT reaction_type FROM post_reactions WHERE post_id = ? AND fingerprint = ?", [postId, fingerprint], (err2, mineRows) => {
+      if (err2) return cb(err2);
+      cb(null, { counts, mine: (mineRows || []).map(r => r.reaction_type) });
+    });
+  });
+}
+
+app.get("/api/posts/:id/reactions", (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const postId = parseInt(req.params.id);
+  const fingerprint = (req.query.fingerprint || "anonymous").substring(0, 100);
+  if (isNaN(postId) || postId <= 0) return res.status(400).json({ error: "无效的帖子ID" });
+  buildReactionSummary(postId, fingerprint, (err, data) => {
+    if (err) { logger.error("查询反应失败: " + err.message); return res.status(500).json({ error: "查询失败" }); }
+    res.json(data);
+  });
+});
+
+app.post("/api/posts/:id/reactions", rateLimit(60000, 60), (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const postId = parseInt(req.params.id);
+  const fingerprint = (req.body.fingerprint || "anonymous").substring(0, 100);
+  const type = req.body.type;
+  if (isNaN(postId) || postId <= 0) return res.status(400).json({ error: "无效的帖子ID" });
+  if (!VALID_REACTIONS.includes(type)) return res.status(400).json({ error: "无效的反应类型" });
+
+  const respond = () => buildReactionSummary(postId, fingerprint, (e, data) => {
+    if (e) return res.status(500).json({ error: "操作失败" });
+    invalidateWriteCaches();
+    res.json(data);
+  });
+
+  db.get("SELECT id FROM post_reactions WHERE post_id = ? AND fingerprint = ? AND reaction_type = ?", [postId, fingerprint, type], (err, row) => {
+    if (err) { logger.error("查询反应失败: " + err.message); return res.status(500).json({ error: "操作失败" }); }
+    if (row) {
+      db.run("DELETE FROM post_reactions WHERE id = ?", [row.id], (e) => {
+        if (e) { logger.error("取消反应失败: " + e.message); return res.status(500).json({ error: "操作失败" }); }
+        respond();
+      });
+    } else {
+      db.get("SELECT id FROM posts WHERE id = ? AND is_hidden = 0", [postId], (e0, post) => {
+        if (e0) { logger.error("校验帖子失败: " + e0.message); return res.status(500).json({ error: "操作失败" }); }
+        if (!post) return res.status(404).json({ error: "帖子不存在" });
+        db.run("INSERT INTO post_reactions (post_id, fingerprint, reaction_type) VALUES (?, ?, ?)", [postId, fingerprint, type], (e) => {
+          if (e && !(e.message && e.message.includes("UNIQUE"))) { logger.error("添加反应失败: " + e.message); return res.status(500).json({ error: "操作失败" }); }
+          respond();
+        });
+      });
+    }
+  });
 });
 
 // ============ 评论相关（增强版：嵌套回复、昵称、点赞、排序） ============

@@ -1753,4 +1753,40 @@
       margin-bottom: 16px;
     }
     .crisis-btn { width: 100%; }
+
+    /* ============ 情绪共鸣反应 ============ */
+    .post-reactions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .reaction-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 11px;
+      border-radius: 999px;
+      background: var(--hover-bg-5);
+      border: 1px solid var(--border-color);
+      color: var(--text-gray-300);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.18s;
+      line-height: 1.4;
+    }
+    .reaction-btn:hover {
+      background: var(--hover-bg-10);
+      transform: translateY(-1px);
+    }
+    .reaction-btn .reaction-emoji { font-size: 0.95rem; }
+    .reaction-btn .reaction-count { font-variant-numeric: tabular-nums; min-width: 8px; text-align: left; }
+    .reaction-btn.reacted {
+      background: rgba(251, 146, 60, 0.16);
+      border-color: rgba(251, 146, 60, 0.5);
+      color: var(--accent-orange);
+    }
+    @media (max-width: 640px) {
+      .reaction-btn { padding: 4px 9px; font-size: 0.76rem; }
+    }
   
