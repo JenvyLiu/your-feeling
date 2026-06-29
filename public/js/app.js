@@ -68,6 +68,9 @@
           case 'goto-post':
             if (id) gotoPost(id);
             break;
+          case 'reveal-cw':
+            if (id) revealCw(id);
+            break;
           case 'random-nickname':
             if (id) generateRandomNickname(id);
             break;
@@ -348,7 +351,13 @@
 
       var html = '<div class="post-card" id="post-' + post.id + '">';
       // 使用 textContent 渲染帖子主体内容,防止 XSS
-      html += '<div class="post-content"></div>';
+      if (post.is_sensitive) {
+        // 敏感内容默认折叠（保持 .post-content 为直接子元素，不破坏 setPostContents）
+        html += '<div class="post-content cw-blurred"></div>';
+        html += '<button class="cw-reveal" data-action="reveal-cw" data-id="' + post.id + '"><i class="fa fa-eye-slash" aria-hidden="true"></i> 敏感内容 · 点击查看</button>';
+      } else {
+        html += '<div class="post-content"></div>';
+      }
 
       // 图片
       if (post.image_url) {
@@ -1385,6 +1394,12 @@
         });
       } catch (err) { similarLoaded[postId] = false; }
     }
+    function revealCw(id) {
+      var el = document.querySelector('#post-' + id + ' > .post-content');
+      if (el) el.classList.remove('cw-blurred');
+      var btn = document.querySelector('#post-' + id + ' .cw-reveal');
+      if (btn) btn.style.display = 'none';
+    }
     function gotoPost(id) {
       var el = document.getElementById('post-' + id);
       if (el) {
@@ -1843,6 +1858,8 @@
         var tags = tagsVal.split(',').map(function(t) { return t.trim(); }).filter(function(t) { return t; }).slice(0, 5);
         formData.append('tags', JSON.stringify(tags));
       }
+      var sensitiveEl = document.getElementById('post-sensitive');
+      if (sensitiveEl && sensitiveEl.checked) formData.append('sensitive', 'true');
 
       try {
         var result = await stableFetch(API_BASE + '/api/posts', { method: 'POST', body: formData });

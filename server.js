@@ -259,6 +259,16 @@ function detectCrisis(text) {
   return null;
 }
 
+// ============ 防重复发帖（内存，5 分钟窗口；键为 ip+内容 的哈希，不持久不记录） ============
+const recentPostStore = new Map();
+const DUP_POST_WINDOW_MS = 5 * 60 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, ts] of recentPostStore.entries()) {
+    if (now - ts > DUP_POST_WINDOW_MS) recentPostStore.delete(k);
+  }
+}, 5 * 60 * 1000);
+
 // ============ 匿名昵称生成器 ============
 const nicknameAdjectives = [
   "温柔的", "沉默的", "快乐的", "忧伤的", "勇敢的",
@@ -391,6 +401,12 @@ function initDatabase(database) {
         database.run("ALTER TABLE posts ADD COLUMN is_hidden INTEGER DEFAULT 0", (err) => {
           if (err) logger.error("添加 is_hidden 列失败: " + err.message);
           else logger.info("已添加 is_hidden 列");
+        });
+      }
+      if (!columnNames.includes('is_sensitive')) {
+        database.run("ALTER TABLE posts ADD COLUMN is_sensitive INTEGER DEFAULT 0", (err) => {
+          if (err) logger.error("添加 is_sensitive 列失败: " + err.message);
+          else logger.info("已添加 posts.is_sensitive 列");
         });
       }
       if (!columnNames.includes('tags')) {
@@ -1321,12 +1337,21 @@ app.post("/api/posts", rateLimit(60000, 10), uploadHandle.single("image"), (req,
   const mood = req.body.mood || null;
   const expires_in = req.body.expires_in || null; // 单位：小时，null表示永不过期
   const tags = req.body.tags || null; // 逗号分隔的标签
+  const isSensitive = (req.body.sensitive === true || req.body.sensitive === "true" || req.body.sensitive === "1") ? 1 : 0;
 
   if (!content || !content.trim()) {
     if (req.file && req.file.path) {
       fs.unlink(req.file.path, () => {});
     }
     return res.status(400).json({ error: "内容不能为空" });
+  }
+
+  // 防重复发帖：同一来源短时间内提交完全相同内容则拦截（保留草稿，前端不清空）
+  const dupKey = crypto.createHash("sha256").update(String(req.ip || "?") + "|" + content.trim()).digest("hex");
+  const lastDup = recentPostStore.get(dupKey);
+  if (lastDup && Date.now() - lastDup < DUP_POST_WINDOW_MS) {
+    if (req.file && req.file.path) fs.unlink(req.file.path, () => {});
+    return res.status(429).json({ error: "你刚刚发过相同的内容了，先歇一会儿吧～", keepDraft: true });
   }
 
   // 内容长度限制：最多 5000 字符（约 1500 个字），防止数据库膨胀攻击
@@ -1394,8 +1419,8 @@ app.post("/api/posts", rateLimit(60000, 10), uploadHandle.single("image"), (req,
   const crisisMatch = detectCrisis(content);
 
   db.run(
-    "INSERT INTO posts (content, image_url, link_url, mood, expires_at, tags) VALUES (?, ?, ?, ?, ?, ?)",
-    [filteredContent, image_url, safe_link_url, safe_mood, expires_at, cleanTags],
+    "INSERT INTO posts (content, image_url, link_url, mood, expires_at, tags, is_sensitive) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [filteredContent, image_url, safe_link_url, safe_mood, expires_at, cleanTags, isSensitive],
     function(err) {
       if (err) {
         logger.error("发布帖子失败: " + err.message);
@@ -1405,6 +1430,7 @@ app.post("/api/posts", rateLimit(60000, 10), uploadHandle.single("image"), (req,
         }
         return res.status(500).json({ error: "发布失败，请重试" });
       }
+      recentPostStore.set(dupKey, Date.now());
       invalidateWriteCaches();
       // 命中危机关键词：静默记录供管理员关怀（不公开、不影响展示），并提示作者求助资源
       if (crisisMatch) {
@@ -1421,6 +1447,7 @@ app.post("/api/posts", rateLimit(60000, 10), uploadHandle.single("image"), (req,
         mood,
         expires_at,
         tags: cleanTags,
+        is_sensitive: isSensitive,
         crisisSupport: !!crisisMatch
       });
     }
@@ -2179,6 +2206,23 @@ app.get("/api/admin/crisis-flags", checkAdmin, (req, res) => {
       return res.status(500).json({ error: "查询失败" });
     }
     res.json(rows || []);
+  });
+});
+
+// ============ 数据备份导出（仅管理员；VACUUM INTO 一致性快照） ============
+app.get("/api/admin/backup", checkAdmin, (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const snapPath = path.join(LOG_DIR, "backup-" + Date.now() + ".sqlite");
+  db.run("VACUUM INTO ?", [snapPath], (err) => {
+    if (err) {
+      logger.error("数据库备份失败: " + err.message);
+      return res.status(500).json({ error: "备份失败" });
+    }
+    auditLog("ADMIN_BACKUP", req, "snapshot");
+    res.download(snapPath, "your-feeling-backup.sqlite", (derr) => {
+      fs.unlink(snapPath, () => {});
+      if (derr && !res.headersSent) logger.error("备份下载失败: " + derr.message);
+    });
   });
 });
 

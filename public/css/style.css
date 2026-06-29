@@ -1841,4 +1841,39 @@
     }
     .drift-meta { margin-top: 12px; font-size: 0.8rem; color: var(--text-muted); }
     .drift-again { width: 100%; }
+
+    /* ============ 敏感内容折叠 (CW) ============ */
+    .post-content.cw-blurred {
+      filter: blur(9px);
+      user-select: none;
+      pointer-events: none;
+      max-height: 70px;
+      overflow: hidden;
+    }
+    .cw-reveal {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 4px 0 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(251, 191, 36, 0.12);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      color: var(--warning);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .cw-reveal:hover { background: rgba(251, 191, 36, 0.2); }
+    .cw-toggle {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--text-gray-300);
+      cursor: pointer;
+      line-height: 1.5;
+    }
+    .cw-toggle input { margin-top: 3px; flex-shrink: 0; }
+    .cw-toggle .fa { color: var(--warning); }
   
