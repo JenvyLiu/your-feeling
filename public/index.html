@@ -3,281 +3,332 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Feeling - 匿名分享广场</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-  <style>
-    body {
-      background-color: #0f0f0f;
-      color: #e5e5e5;
-    }
-    .post-card {
-      background-color: #1a1a1a;
-      border: 1px solid #2a2a2a;
-    }
-    .btn-primary {
-      background-color: #6366f1;
-      hover:bg-indigo-600;
-    }
-    .input-field {
-      background-color: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      color: #e5e5e5;
-    }
-    .input-field:focus {
-      border-color: #6366f1;
-      outline: none;
-    }
-    .comment-section {
-      background-color: #141414;
-    }
-    .text-muted {
-      color: #888888;
-    }
-  </style>
+  <meta name="description" content="Your Feeling - 匿名分享你的心声">
+  <meta name="keywords" content="匿名分享,心情,吐槽,情感社区">
+  <meta name="author" content="Your Feeling">
+  <meta name="theme-color" content="#0f0c29">
+  <meta name="robots" content="index, follow">
+
+  <!-- Open Graph / 社交分享卡片 -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Your Feeling - 匿名分享你的心声">
+  <meta property="og:description" content="一个匿名分享心情与想法的温暖社区，让每一份心事都被看见。">
+  <meta property="og:site_name" content="Your Feeling">
+  <meta property="og:locale" content="zh_CN">
+
+  <!-- Twitter 卡片 -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Your Feeling - 匿名分享你的心声">
+  <meta name="twitter:description" content="一个匿名分享心情与想法的温暖社区">
+
+  <title>Your Feeling - 匿名分享你的心声</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/vendor/font-awesome/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/css/style.css">
 </head>
-<body class="min-h-screen">
-  <header class="sticky top-0 z-50 bg-[#0f0f0f]/95 backdrop-blur-sm border-b border-[#2a2a2a]">
-    <div class="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-      <div class="flex items-center space-x-2">
-        <i class="fa fa-heart text-pink-500 text-xl"></i>
-        <h1 class="text-xl font-bold">Your Feeling</h1>
+<body>
+
+  <!-- Toast 通知容器 -->
+  <div id="toast" class="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- 图片灯箱 -->
+  <div id="lightbox" class="lightbox" onclick="closeLightbox()" role="dialog" aria-modal="true" aria-label="图片预览">
+    <img id="lightbox-img" src="" alt="预览图片">
+  </div>
+
+  <!-- 举报模态框 -->
+  <div id="report-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="举报内容">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-header">
+        <span class="modal-title"><i class="fa fa-flag" style="color: var(--danger); margin-right: 8px;" aria-hidden="true"></i>举报内容</span>
+        <button class="modal-close" onclick="closeReportModal()" aria-label="关闭"><i class="fa fa-times" aria-hidden="true"></i></button>
       </div>
-      <button onclick="showCreatePost()" class="flex items-center space-x-1 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg transition-colors">
-        <i class="fa fa-pencil"></i>
-        <span>分享</span>
+      <div id="report-reasons" style="margin-bottom: 16px;">
+        <p class="text-sm text-muted text-center py-4"><i class="fa fa-spinner fa-spin"></i> 加载中...</p>
+      </div>
+      <button id="report-submit-btn" class="btn-primary" style="width: 100%;" onclick="submitReport()">
+        <i class="fa fa-paper-plane"></i> 提交举报
       </button>
     </div>
-  </header>
+  </div>
 
-  <main class="max-w-2xl mx-auto px-4 py-6">
-    <div id="posts-container" class="space-y-4"></div>
-    <div id="loading" class="text-center py-8 text-gray-500">
-      <i class="fa fa-spinner fa-spin text-xl"></i>
-      <p class="mt-2">加载中...</p>
-    </div>
-  </main>
-
-  <div id="create-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden">
-    <div class="bg-[#1a1a1a] rounded-xl w-full max-w-lg mx-4 border border-[#2a2a2a]">
-      <div class="p-4 border-b border-[#2a2a2a] flex items-center justify-between">
-        <h2 class="text-lg font-semibold">分享你的心情</h2>
-        <button onclick="closeCreatePost()" class="text-gray-400 hover:text-white">
-          <i class="fa fa-times text-xl"></i>
-        </button>
+  <!-- 顶部导航栏 -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <span class="navbar-title"><i class="fa fa-heart"></i> Your Feeling</span>
+      <div class="navbar-controls">
+        <input type="text" id="search-input" class="nav-input" placeholder="搜索..." aria-label="搜索帖子" oninput="handleSearch()">
+        <select id="sort-select" class="nav-select" onchange="handleSortChange()">
+          <option value="latest">最新</option>
+          <option value="hot">热门</option>
+          <option value="comments">评论</option>
+        </select>
+        <select id="mood-filter" class="nav-select" onchange="handleMoodFilter()">
+          <option value="">全部情绪</option>
+          <option value="happy">😊 开心</option>
+          <option value="sad">😢 难过</option>
+          <option value="angry">😠 生气</option>
+          <option value="anxious">😰 焦虑</option>
+          <option value="calm">😌 平静</option>
+          <option value="confused">🤔 困惑</option>
+          <option value="grateful">💖 感恩</option>
+          <option value="tired">😫 疲惫</option>
+          <option value="excited">🤩 兴奋</option>
+        </select>
+        <button class="nav-btn" id="bookmarks-btn" onclick="toggleBookmarksView()" aria-label="我的收藏" title="我的收藏"><i class="fa fa-bookmark" aria-hidden="true"></i></button>
+        <button class="nav-btn" id="admin-btn" onclick="openAdminModal()" aria-label="管理面板" title="管理面板"><i class="fa fa-shield" aria-hidden="true"></i></button>
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换深色/浅色主题" title="切换主题"><i class="fa fa-moon-o" id="theme-icon" aria-hidden="true"></i></button>
       </div>
-      <form id="post-form" enctype="multipart/form-data" class="p-4 space-y-4">
-        <textarea 
-          id="post-content" 
-          placeholder="说说你的想法..." 
-          class="input-field w-full p-3 rounded-lg resize-none"
-          rows="4"
-          required
-        ></textarea>
-        <div class="flex items-center space-x-2">
-          <label class="flex items-center space-x-2 cursor-pointer text-gray-400 hover:text-white">
-            <i class="fa fa-image"></i>
-            <span>图片</span>
-            <input type="file" id="post-image" accept="image/*" class="hidden">
-          </label>
-          <label class="flex items-center space-x-2 cursor-pointer text-gray-400 hover:text-white">
-            <i class="fa fa-link"></i>
-            <span>链接</span>
-            <input type="text" id="post-link" placeholder="输入链接" class="input-field px-3 py-1.5 rounded-lg text-sm w-48 hidden">
-          </label>
+    </div>
+  </nav>
+
+  <!-- 主内容区 -->
+  <div class="main-container">
+
+    <!-- 每日一句推荐区 -->
+    <div id="featured-section" class="featured-section" style="display: none;">
+      <div class="featured-label"><i class="fa fa-star"></i> 每日一句</div>
+      <div class="featured-content" id="featured-content"></div>
+    </div>
+
+    <!-- 帖子容器 -->
+    <div id="posts-container"></div>
+
+    <!-- 加载更多指示器 -->
+    <div id="load-more-indicator" class="load-more-indicator" style="display: none;">
+      <i class="fa fa-spinner fa-spin"></i> 加载中...
+    </div>
+
+    <!-- 空状态 -->
+    <div id="empty-state" class="empty-state" style="display: none;">
+      <i class="fa fa-cloud"></i>
+      <p>还没有人发布内容，来做第一个吧！</p>
+    </div>
+
+    <!-- 无搜索结果 -->
+    <div id="no-results" class="no-results" style="display: none;">
+      <i class="fa fa-search"></i>
+      <p>没有找到相关内容</p>
+    </div>
+
+    <!-- 收藏视图容器 -->
+    <div id="bookmarks-container" style="display: none;"></div>
+
+    <!-- 热门标签区 -->
+    <div id="popular-tags-section" class="popular-tags-section" style="display: none;">
+      <div class="tags-title"><i class="fa fa-fire"></i> 热门标签</div>
+      <div id="popular-tags-list"></div>
+    </div>
+
+  </div>
+
+  <!-- 浮动分享/发布按钮 -->
+  <button class="fab-share" onclick="openShareModal()" aria-label="发布新内容" title="发布新内容">
+    <i class="fa fa-plus" aria-hidden="true"></i>
+  </button>
+
+  <!-- 回到顶部按钮 -->
+  <button id="scroll-top-btn" class="scroll-top-btn" onclick="scrollToTop()" aria-label="回到顶部" title="回到顶部">
+    <i class="fa fa-chevron-up" aria-hidden="true"></i>
+  </button>
+
+  <!-- 分享模态框 -->
+  <div id="share-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="发布心声">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="modal-title"><i class="fa fa-edit" style="color: var(--accent-purple); margin-right: 8px;" aria-hidden="true"></i>发布心声</span>
+        <button class="modal-close" onclick="closeShareModal()" aria-label="关闭"><i class="fa fa-times" aria-hidden="true"></i></button>
+      </div>
+      <form id="share-form" onsubmit="return false;">
+        <div id="content-wrapper" class="form-group" style="position: relative;">
+          <textarea id="post-content" class="form-textarea" placeholder="此刻你在想什么..." aria-label="发布心声" oninput="updateCharCount()"></textarea>
+          <span id="char-count" class="char-count absolute bottom-3 right-3">0 字</span>
         </div>
-        <div id="image-preview" class="hidden">
-          <img id="preview-img" class="max-h-40 rounded-lg">
+
+        <!-- 心情选择 -->
+        <div class="form-group">
+          <label class="form-label">选择心情</label>
+          <input type="hidden" id="selected-mood" value="">
+          <div class="mood-options">
+            <div class="mood-option" data-mood="happy" onclick="selectMood('happy')"><i class="fa fa-smile-o"></i> 开心</div>
+            <div class="mood-option" data-mood="sad" onclick="selectMood('sad')"><i class="fa fa-frown-o"></i> 难过</div>
+            <div class="mood-option" data-mood="angry" onclick="selectMood('angry')"><i class="fa fa-angry"></i> 生气</div>
+            <div class="mood-option" data-mood="anxious" onclick="selectMood('anxious')"><i class="fa fa-meh-o"></i> 焦虑</div>
+            <div class="mood-option" data-mood="calm" onclick="selectMood('calm')"><i class="fa fa-smile-o"></i> 平静</div>
+            <div class="mood-option" data-mood="love" onclick="selectMood('love')"><i class="fa fa-heart"></i> 恋爱</div>
+            <div class="mood-option" data-mood="tired" onclick="selectMood('tired')"><i class="fa fa-tired"></i> 疲惫</div>
+            <div class="mood-option" data-mood="excited" onclick="selectMood('excited')"><i class="fa fa-bolt"></i> 兴奋</div>
+          </div>
         </div>
-        <div class="flex justify-end space-x-2">
-          <button type="button" onclick="closeCreatePost()" class="px-4 py-2 text-gray-400 hover:text-white">取消</button>
-          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg">发布</button>
+
+        <!-- 有效期选择 -->
+        <div class="form-group">
+          <label class="form-label">有效期</label>
+          <input type="hidden" id="selected-expiry" value="">
+          <div class="expiry-options">
+            <div class="expiry-option selected" data-expiry="" onclick="selectExpiry('')">永久</div>
+            <div class="expiry-option" data-expiry="1" onclick="selectExpiry('1')">1小时</div>
+            <div class="expiry-option" data-expiry="6" onclick="selectExpiry('6')">6小时</div>
+            <div class="expiry-option" data-expiry="24" onclick="selectExpiry('24')">1天</div>
+            <div class="expiry-option" data-expiry="72" onclick="selectExpiry('72')">3天</div>
+            <div class="expiry-option" data-expiry="168" onclick="selectExpiry('168')">7天</div>
+          </div>
         </div>
+
+        <!-- 工具栏 -->
+        <div class="toolbar-btns">
+          <button type="button" class="btn-secondary" onclick="document.getElementById('post-image').click()">
+            <i class="fa fa-image"></i> 图片
+          </button>
+          <button type="button" class="btn-secondary" onclick="toggleLinkInput()">
+            <i class="fa fa-link"></i> 链接
+          </button>
+        </div>
+        <input type="file" id="post-image" accept="image/*" style="display:none">
+
+        <!-- 图片预览 -->
+        <div id="image-preview" class="image-preview" style="display: none;">
+          <img id="preview-img" src="" alt="图片预览">
+          <button type="button" class="remove-btn" onclick="removeImage()" aria-label="移除图片"><i class="fa fa-times" aria-hidden="true"></i></button>
+        </div>
+
+        <!-- 链接输入 -->
+        <div class="form-group" style="margin-top: 12px;">
+          <input type="url" id="post-link" class="form-input" placeholder="粘贴链接地址..." aria-label="帖子链接" style="display: none;">
+        </div>
+
+        <!-- 标签输入 -->
+        <div class="form-group">
+          <input type="text" id="post-tags" class="form-input" placeholder="添加标签（逗号分隔，最多5个）" aria-label="帖子标签">
+          <div id="tags-preview" style="margin-top: 8px;"></div>
+        </div>
+
+        <!-- 提交按钮 -->
+        <button type="submit" id="submit-btn" class="btn-primary" style="width: 100%;">
+          <i class="fa fa-paper-plane"></i><span>发布</span>
+        </button>
       </form>
     </div>
   </div>
 
-  <script>
-    const API_BASE = '';
+  <!-- 管理面板模态框 -->
+  <div id="admin-modal" class="modal-overlay" style="align-items: stretch; padding: 0;" role="dialog" aria-modal="true" aria-label="管理面板">
+    <div class="admin-panel">
+      <!-- 顶部导航栏 -->
+      <div class="admin-topbar">
+        <div class="admin-topbar-left">
+          <i class="fa fa-shield" style="color: var(--accent-purple); font-size: 1.1rem;"></i>
+          <span style="font-weight: 600; font-size: 1rem;">管理面板</span>
+        </div>
+        <div class="admin-topbar-right">
+          <button class="admin-topbar-btn" onclick="closeAdminModal()"><i class="fa fa-times"></i> 关闭</button>
+        </div>
+      </div>
 
-    async function loadPosts() {
-      const response = await fetch(`${API_BASE}/api/posts`);
-      const posts = await response.json();
-      renderPosts(posts);
-    }
-
-    function renderPosts(posts) {
-      const container = document.getElementById('posts-container');
-      const loading = document.getElementById('loading');
-      loading.style.display = 'none';
-      
-      if (posts.length === 0) {
-        container.innerHTML = '<div class="text-center py-12 text-gray-500"><i class="fa fa-inbox text-4xl mb-4"></i><p>还没有分享，快来做第一个吧！</p></div>';
-        return;
-      }
-
-      container.innerHTML = posts.map(post => `
-        <div class="post-card rounded-xl p-4">
-          <div class="flex items-start justify-between mb-3">
-            <div class="flex items-center space-x-2">
-              <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center">
-                <i class="fa fa-user text-white text-sm"></i>
-              </div>
-              <span class="text-sm text-gray-400">匿名用户</span>
-            </div>
-            <span class="text-xs text-gray-500">${formatTime(post.created_at)}</span>
+      <!-- 管理员登录 -->
+      <div id="admin-login" class="admin-login-wrap">
+        <div class="admin-login-box">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <i class="fa fa-lock" style="font-size: 2rem; color: var(--accent-purple);"></i>
+            <h3 style="margin-top: 12px; color: var(--text-primary);">管理员验证</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">请输入管理员密码以继续</p>
           </div>
-          <p class="text-gray-100 mb-3">${escapeHtml(post.content)}</p>
-          ${post.image_url ? `<img src="${post.image_url}" class="w-full rounded-lg mb-3 max-h-64 object-cover">` : ''}
-          ${post.link_url ? `<a href="${post.link_url}" target="_blank" class="text-indigo-400 hover:text-indigo-300 mb-3 block flex items-center space-x-1"><i class="fa fa-external-link"></i><span>${post.link_url}</span></a>` : ''}
-          <div class="flex items-center space-x-4 pt-3 border-t border-[#2a2a2a]">
-            <button onclick="toggleComments(${post.id})" class="flex items-center space-x-1 text-gray-400 hover:text-white">
-              <i class="fa fa-comment"></i>
-              <span>${post.comment_count || 0}</span>
+          <div class="form-group">
+            <input type="password" id="admin-password-input" class="form-input" placeholder="请输入管理员密码" onkeydown="if(event.key==='Enter')adminLogin()">
+          </div>
+          <button class="btn-primary" style="width: 100%;" onclick="adminLogin()">
+            <i class="fa fa-sign-in"></i> 登录
+          </button>
+        </div>
+      </div>
+
+      <!-- 管理面板内容 -->
+      <div id="admin-dashboard" style="display: none;" class="admin-body">
+        <!-- 统计卡片 -->
+        <div id="admin-stats" class="admin-stats-row"></div>
+
+        <!-- 工具栏：搜索 + 筛选 + 批量操作 -->
+        <div class="admin-toolbar">
+          <div class="admin-toolbar-left">
+            <div class="admin-search-box">
+              <i class="fa fa-search" style="color: var(--text-muted); font-size: 0.8rem;"></i>
+              <input type="text" id="admin-search-input" class="admin-search-input" placeholder="搜索帖子内容..." aria-label="管理员搜索" oninput="adminDebounceSearch()">
+            </div>
+            <select id="admin-filter-select" class="admin-filter-select" onchange="adminCurrentPage=1;loadAdminPostsList()">
+              <option value="all">全部帖子</option>
+              <option value="active">活跃帖子</option>
+              <option value="hidden">已隐藏</option>
+              <option value="expired">已过期</option>
+            </select>
+          </div>
+          <div class="admin-toolbar-right">
+            <label class="admin-check-label" id="admin-select-all-wrap" style="display:none;">
+              <input type="checkbox" id="admin-select-all" onchange="adminToggleSelectAll()">
+              <span>全选</span>
+            </label>
+            <button class="admin-batch-btn" id="admin-batch-delete-btn" style="display:none;" onclick="adminBatchDelete()">
+              <i class="fa fa-trash"></i> 批量删除
+            </button>
+            <button class="admin-batch-btn admin-batch-btn-secondary" id="admin-batch-hide-btn" style="display:none;" onclick="adminBatchToggleHide()">
+              <i class="fa fa-eye-slash"></i> 批量隐藏
             </button>
           </div>
-          <div id="comments-${post.id}" class="comment-section rounded-lg mt-3 p-3 hidden">
-            <div id="comments-list-${post.id}" class="space-y-2 mb-3"></div>
-            <form onsubmit="submitComment(event, ${post.id})" class="flex space-x-2">
-              <input type="text" placeholder="写下你的评论..." class="input-field flex-1 px-3 py-2 rounded-lg text-sm" required>
-              <button type="submit" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm">发送</button>
-            </form>
-          </div>
         </div>
-      `).join('');
-    }
 
-    async function loadComments(postId) {
-      const response = await fetch(`${API_BASE}/api/posts/${postId}/comments`);
-      const comments = await response.json();
-      const list = document.getElementById(`comments-list-${postId}`);
-      
-      if (comments.length === 0) {
-        list.innerHTML = '<p class="text-sm text-gray-500 text-center py-2">暂无评论</p>';
-        return;
-      }
-
-      list.innerHTML = comments.map(comment => `
-        <div class="flex items-start space-x-2">
-          <div class="w-6 h-6 rounded-full bg-gradient-to-br from-gray-500 to-gray-600 flex items-center justify-center flex-shrink-0">
-            <i class="fa fa-user text-white text-xs"></i>
-          </div>
-          <div class="flex-1">
-            <p class="text-sm text-gray-300">${escapeHtml(comment.content)}</p>
-            <span class="text-xs text-gray-500">${formatTime(comment.created_at)}</span>
-          </div>
+        <!-- 帖子列表 -->
+        <div id="admin-posts-list" class="admin-posts-list">
+          <p class="text-center text-muted" style="padding: 40px 0;"><i class="fa fa-spinner fa-spin"></i> 加载中...</p>
         </div>
-      `).join('');
-    }
 
-    function toggleComments(postId) {
-      const section = document.getElementById(`comments-${postId}`);
-      if (section.style.display === 'none' || section.style.display === '') {
-        section.style.display = 'block';
-        loadComments(postId);
-      } else {
-        section.style.display = 'none';
-      }
-    }
+        <!-- 分页 -->
+        <div id="admin-pagination" class="admin-pagination" style="display:none;"></div>
 
-    async function submitComment(event, postId) {
-      event.preventDefault();
-      const input = event.target.querySelector('input');
-      const content = input.value.trim();
-      
-      if (!content) return;
+        <!-- 底部退出 -->
+        <div style="padding: 16px 0; text-align: center;">
+          <button class="btn-secondary" style="padding: 8px 24px;" onclick="adminLogout()"><i class="fa fa-sign-out"></i> 退出管理</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-      const response = await fetch(`${API_BASE}/api/posts/${postId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
-      });
+  <script src="/js/app.js"></script>
 
-      if (response.ok) {
-        input.value = '';
-        loadComments(postId);
-      } else {
-        const data = await response.json();
-        alert(data.error || '评论失败');
-      }
-    }
+  <!-- 悬浮音乐播放器 -->
+  <div class="music-player collapsed" id="music-player">
+    <!-- 音量浮动提示 -->
+    <div class="music-vol-toast" id="music-vol-toast">
+      <div class="music-vol-toast-top">
+        <i class="music-vol-toast-icon fa fa-volume-up" id="music-vol-toast-icon"></i>
+        <div class="music-vol-toast-bar"><div class="music-vol-toast-fill" id="music-vol-toast-fill" style="width:30%"></div></div>
+        <span class="music-vol-toast-pct" id="music-vol-toast-pct">30%</span>
+      </div>
+      <span class="music-vol-toast-arrow" id="music-vol-toast-arrow"><i class="fa fa-arrow-up"></i> 滑动调节</span>
+    </div>
+    <button class="music-toggle-btn" id="music-toggle" onclick="musicTogglePlay()" aria-label="播放/暂停背景音乐" title="背景音乐">
+      <i class="fa fa-music" aria-hidden="true"></i>
+    </button>
+    <div class="music-player-body">
+      <div class="music-visualizer" id="music-visualizer">
+        <div class="bar" style="height:4px"></div>
+        <div class="bar" style="height:8px"></div>
+        <div class="bar" style="height:6px"></div>
+        <div class="bar" style="height:10px"></div>
+        <div class="bar" style="height:5px"></div>
+      </div>
+      <div class="music-info">
+        <span class="music-title" id="music-title">星夜漫步</span>
+        <span class="music-artist" id="music-artist">Ambient</span>
+      </div>
+      <div class="music-controls">
+        <button class="music-ctrl-btn" onclick="musicPrev()" aria-label="上一首" title="上一首"><i class="fa fa-step-backward" aria-hidden="true"></i></button>
+        <button class="music-ctrl-btn" onclick="musicNext()" aria-label="下一首" title="下一首"><i class="fa fa-step-forward" aria-hidden="true"></i></button>
+        <i class="fa fa-volume-up music-volume-icon" id="music-vol-icon" onclick="musicToggleMute()" role="button" tabindex="0" aria-label="点击静音，上下滑动调节音量" title="点击静音 / 上下滑动调节音量"></i>
+      </div>
+      <button class="music-collapse-btn" onclick="musicCollapse()" aria-label="收起播放器" title="收起"><i class="fa fa-chevron-left" aria-hidden="true"></i></button>
+    </div>
+    <span class="drag-hint" id="drag-hint">拖拽移动 · 上下滑调音量</span>
+  </div>
 
-    function showCreatePost() {
-      document.getElementById('create-modal').style.display = 'flex';
-      document.getElementById('post-content').focus();
-    }
-
-    function closeCreatePost() {
-      document.getElementById('create-modal').style.display = 'none';
-      document.getElementById('post-form').reset();
-      document.getElementById('image-preview').style.display = 'none';
-    }
-
-    document.getElementById('post-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      
-      const formData = new FormData();
-      formData.append('content', document.getElementById('post-content').value);
-      formData.append('link_url', document.getElementById('post-link').value);
-      
-      const fileInput = document.getElementById('post-image');
-      if (fileInput.files.length > 0) {
-        formData.append('image', fileInput.files[0]);
-      }
-
-      const response = await fetch(`${API_BASE}/api/posts`, {
-        method: 'POST',
-        body: formData
-      });
-
-      if (response.ok) {
-        closeCreatePost();
-        loadPosts();
-      } else {
-        const data = await response.json();
-        alert(data.error || '发布失败');
-      }
-    });
-
-    document.querySelector('label[for="post-image"]').addEventListener('click', () => {
-      document.getElementById('post-image').click();
-    });
-
-    document.getElementById('post-image').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          document.getElementById('preview-img').src = event.target.result;
-          document.getElementById('image-preview').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
-    document.querySelector('label[for="post-link"]').addEventListener('click', () => {
-      const linkInput = document.getElementById('post-link');
-      linkInput.style.display = linkInput.style.display === 'none' ? 'block' : 'none';
-    });
-
-    function formatTime(timestamp) {
-      const date = new Date(timestamp);
-      const now = new Date();
-      const diff = now - date;
-      
-      if (diff < 60000) return '刚刚';
-      if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
-      if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
-      return date.toLocaleDateString('zh-CN');
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    document.addEventListener('DOMContentLoaded', loadPosts);
-  </script>
+  <script src="/js/music.js"></script>
 </body>
 </html>

@@ -1,0 +1,22 @@
+{
+  "name": "Your Feeling - 匿名分享你的心声",
+  "short_name": "Your Feeling",
+  "description": "匿名分享你的心声，安全表达你的感受",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0c29",
+  "theme_color": "#0f0c29",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
