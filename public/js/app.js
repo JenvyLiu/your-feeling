@@ -627,6 +627,75 @@
       } catch (err) {}
     }
 
+    // ============ 社区情绪天气 ============
+    var weatherMoodMap = {
+      happy:    { emoji: '😊', label: '开心', color: '#f59e0b' },
+      sad:      { emoji: '😢', label: '难过', color: '#3b82f6' },
+      angry:    { emoji: '😠', label: '生气', color: '#ef4444' },
+      anxious:  { emoji: '😰', label: '焦虑', color: '#8b5cf6' },
+      calm:     { emoji: '😌', label: '平静', color: '#22c55e' },
+      love:     { emoji: '💖', label: '恋爱', color: '#ec4899' },
+      tired:    { emoji: '😫', label: '疲惫', color: '#6b7280' },
+      excited:  { emoji: '🤩', label: '兴奋', color: '#f97316' },
+      confused: { emoji: '🤔', label: '困惑', color: '#14b8a6' },
+      grateful: { emoji: '🙏', label: '感恩', color: '#f472b6' }
+    };
+    var weatherPhrase = {
+      happy: '今天，快乐在这里流动', sad: '有些难过，说出来会好一点', angry: '带着情绪，也没关系',
+      anxious: '很多人和你一样在焦虑', calm: '此刻，大家都很平静', love: '空气里有点甜',
+      tired: '累了就在这里歇一歇', excited: '有人正满怀期待', confused: '迷茫的不止你一个', grateful: '感恩的心在传递'
+    };
+    function weatherMoodInfo(m) {
+      return weatherMoodMap[m] || { emoji: '💭', label: '其他', color: '#94a3b8' };
+    }
+
+    async function loadMoodWeather() {
+      try {
+        var data = await stableFetch(API_BASE + '/api/mood-weather');
+        if (!data || !data.total || !Array.isArray(data.moods) || !data.moods.length) return;
+        var total = data.total;
+        var top = data.moods[0];
+        var topInfo = weatherMoodInfo(top.mood);
+
+        document.getElementById('mw-range').textContent =
+          (data.range === '24h' ? '近 24 小时' : '近 7 日') + ' · ' + total + ' 条心声';
+
+        var hero = document.getElementById('mw-hero');
+        hero.innerHTML = '';
+        var he = document.createElement('span'); he.className = 'mw-hero-emoji'; he.textContent = topInfo.emoji;
+        var ht = document.createElement('div'); ht.className = 'mw-hero-text';
+        var hl = document.createElement('span'); hl.className = 'mw-hero-label';
+        hl.textContent = '此刻社区，' + topInfo.label + '最多';
+        var hs = document.createElement('span'); hs.className = 'mw-hero-sub';
+        hs.textContent = weatherPhrase[top.mood] || '每一种情绪都被看见';
+        ht.appendChild(hl); ht.appendChild(hs);
+        hero.appendChild(he); hero.appendChild(ht);
+
+        var bar = document.getElementById('mw-bar'); bar.innerHTML = '';
+        var legend = document.getElementById('mw-legend'); legend.innerHTML = '';
+        data.moods.forEach(function(m) {
+          var info = weatherMoodInfo(m.mood);
+          var pct = Math.round(m.count / total * 100);
+          var seg = document.createElement('div');
+          seg.className = 'mw-seg';
+          seg.style.width = (m.count / total * 100) + '%';
+          seg.style.background = info.color;
+          seg.title = info.label + ' ' + pct + '%';
+          bar.appendChild(seg);
+
+          var chip = document.createElement('span'); chip.className = 'mw-chip';
+          var dot = document.createElement('span'); dot.className = 'mw-dot'; dot.style.background = info.color;
+          var p = document.createElement('span'); p.className = 'mw-chip-pct'; p.textContent = pct + '%';
+          chip.appendChild(dot);
+          chip.appendChild(document.createTextNode(info.emoji + ' ' + info.label + ' '));
+          chip.appendChild(p);
+          legend.appendChild(chip);
+        });
+
+        document.getElementById('mood-weather-section').style.display = '';
+      } catch (err) {}
+    }
+
     // ============ 管理面板 ============
     var adminCurrentPage = 1;
     var adminPageSize = 10;
@@ -1676,6 +1745,7 @@
       setupDragAndDrop();
       setupCtrlEnter();
       resetAndLoadPosts();
+      loadMoodWeather();
       loadFeaturedPost();
       loadPopularTags();
     });

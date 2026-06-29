@@ -1913,6 +1913,59 @@ app.get("/api/tags/popular", (req, res) => {
   });
 });
 
+// ============ 社区情绪天气（聚合，匿名零风险） ============
+app.get("/api/mood-weather", (req, res) => {
+  if (!dbReady) {
+    return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  }
+
+  const cacheKey = 'mood_weather';
+  const cached = simpleCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < 60000) {
+    return res.json(cached.data);
+  }
+
+  const MIN_SAMPLE = 5; // 样本过少时回退到近 7 日，避免冷启动图表空
+  // 时间窗为固定字面量（非用户输入），无注入风险
+  const aggregate = (sinceExpr, cb) => {
+    db.all(`
+      SELECT mood, COUNT(*) AS count
+      FROM posts
+      WHERE is_hidden = 0
+        AND (expires_at IS NULL OR expires_at > datetime('now'))
+        AND mood IS NOT NULL AND mood != ''
+        AND created_at >= ${sinceExpr}
+      GROUP BY mood
+      ORDER BY count DESC
+    `, (err, rows) => cb(err, rows || []));
+  };
+
+  const finish = (range, rows) => {
+    const total = rows.reduce((s, r) => s + r.count, 0);
+    const data = { range, total, moods: rows };
+    simpleCache.set(cacheKey, { data, timestamp: Date.now() });
+    res.json(data);
+  };
+
+  aggregate("datetime('now','-1 day')", (err, dayRows) => {
+    if (err) {
+      logger.error("查询情绪天气失败: " + err.message);
+      return res.status(500).json({ error: "获取情绪天气失败" });
+    }
+    const dayTotal = dayRows.reduce((s, r) => s + r.count, 0);
+    if (dayTotal >= MIN_SAMPLE) {
+      return finish('24h', dayRows);
+    }
+    aggregate("datetime('now','-7 days')", (err2, weekRows) => {
+      if (err2) {
+        logger.error("查询情绪天气(7日)失败: " + err2.message);
+        return res.status(500).json({ error: "获取情绪天气失败" });
+      }
+      finish('7d', weekRows);
+    });
+  });
+});
+
 // ============ 管理员数据看板 API ============
 app.get("/api/admin/dashboard", checkAdmin, async (req, res) => {
   if (!dbReady) {
