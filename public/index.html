@@ -222,6 +222,31 @@
     </div>
   </div>
 
+  <!-- 危机关怀浮层（发布命中危机关键词时温和提示求助资源） -->
+  <div id="crisis-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="温暖提示与求助资源">
+    <div class="modal-content crisis-content">
+      <div class="crisis-emoji" aria-hidden="true">💛</div>
+      <h3 class="crisis-title">你不是一个人</h3>
+      <p class="crisis-text">看到你此刻或许很不好受。你愿意把它写下来，已经很勇敢了。如果你正被情绪淹没，请记得：你值得被听见，也值得被好好对待。下面有人愿意随时接住你——</p>
+      <div class="crisis-lines">
+        <div class="crisis-line">
+          <span class="crisis-line-name">全国心理援助热线</span>
+          <a class="crisis-line-num" href="tel:12356">12356</a>
+        </div>
+        <div class="crisis-line">
+          <span class="crisis-line-name">北京心理危机干预中心 · 24小时</span>
+          <a class="crisis-line-num" href="tel:01082951332">010-82951332</a>
+        </div>
+        <div class="crisis-line">
+          <span class="crisis-line-name">希望24热线</span>
+          <a class="crisis-line-num" href="tel:4001619995">400-161-9995</a>
+        </div>
+      </div>
+      <p class="crisis-foot">你的心声已经发布。如果愿意，也可以歇一会儿，或在评论里继续说说。</p>
+      <button class="btn-primary crisis-btn" onclick="closeCrisisSupport()">谢谢，我知道了</button>
+    </div>
+  </div>
+
   <!-- 管理面板模态框 -->
   <div id="admin-modal" class="modal-overlay" style="align-items: stretch; padding: 0;" role="dialog" aria-modal="true" aria-label="管理面板">
     <div class="admin-panel">

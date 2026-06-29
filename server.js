@@ -245,6 +245,20 @@ function containsBadWords(text) {
   });
 }
 
+// ============ 危机内容识别（仅提示求助资源，绝不拦截/删除/公开标注） ============
+const crisisKeywords = [
+  "自杀", "想死", "不想活", "活不下去", "撑不下去", "活着没意思", "活着没意义",
+  "结束生命", "结束自己", "了结自己", "轻生", "自残", "自伤", "割腕",
+  "跳楼", "跳河", "不想活了", "死了算了", "一了百了", "离开这个世界", "解脱算了"
+];
+function detectCrisis(text) {
+  if (!text) return null;
+  for (const kw of crisisKeywords) {
+    if (String(text).indexOf(kw) !== -1) return kw;
+  }
+  return null;
+}
+
 // ============ 匿名昵称生成器 ============
 const nicknameAdjectives = [
   "温柔的", "沉默的", "快乐的", "忧伤的", "勇敢的",
@@ -501,6 +515,19 @@ function initDatabase(database) {
       )
     `, (err) => {
       if (err) logger.error("创建bookmarks表失败: " + err.message);
+    });
+
+    // 危机内容标记表（命中危机关键词时记录，仅供管理员关怀回访，不公开、不影响帖子展示）
+    database.run(`
+      CREATE TABLE IF NOT EXISTS crisis_flags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        post_id INTEGER NOT NULL,
+        matched TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+      )
+    `, (err) => {
+      if (err) logger.error("创建crisis_flags表失败: " + err.message);
     });
 
     // 索引
@@ -1286,6 +1313,9 @@ app.post("/api/posts", rateLimit(60000, 10), uploadHandle.single("image"), (req,
 
   const image_url = req.file ? "/uploads/" + req.file.filename : null;
 
+  // 危机内容识别（基于原始内容；仅用于温和提示求助资源，不拦截发布）
+  const crisisMatch = detectCrisis(content);
+
   db.run(
     "INSERT INTO posts (content, image_url, link_url, mood, expires_at, tags) VALUES (?, ?, ?, ?, ?, ?)",
     [filteredContent, image_url, safe_link_url, safe_mood, expires_at, cleanTags],
@@ -1299,6 +1329,13 @@ app.post("/api/posts", rateLimit(60000, 10), uploadHandle.single("image"), (req,
         return res.status(500).json({ error: "发布失败，请重试" });
       }
       invalidateWriteCaches();
+      // 命中危机关键词：静默记录供管理员关怀（不公开、不影响展示），并提示作者求助资源
+      if (crisisMatch) {
+        db.run("INSERT INTO crisis_flags (post_id, matched) VALUES (?, ?)", [this.lastID, crisisMatch], (e) => {
+          if (e) logger.error("记录 crisis_flag 失败: " + e.message);
+        });
+        auditLog("CRISIS_DETECTED", req, "post=" + this.lastID);
+      }
       res.json({
         id: this.lastID,
         content: filteredContent,
@@ -1306,7 +1343,8 @@ app.post("/api/posts", rateLimit(60000, 10), uploadHandle.single("image"), (req,
         link_url,
         mood,
         expires_at,
-        tags: cleanTags
+        tags: cleanTags,
+        crisisSupport: !!crisisMatch
       });
     }
   );
@@ -1984,6 +2022,26 @@ app.get("/api/mood-weather", (req, res) => {
       }
       finish('7d', weekRows);
     });
+  });
+});
+
+// ============ 危机标记列表（仅管理员，用于关怀回访；不公开） ============
+app.get("/api/admin/crisis-flags", checkAdmin, (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  db.all(`
+    SELECT cf.id, cf.post_id, cf.matched, cf.created_at,
+           p.content, p.is_hidden,
+           (CASE WHEN p.expires_at IS NOT NULL AND p.expires_at <= datetime('now') THEN 1 ELSE 0 END) AS expired
+    FROM crisis_flags cf
+    LEFT JOIN posts p ON p.id = cf.post_id
+    ORDER BY cf.created_at DESC
+    LIMIT 100
+  `, (err, rows) => {
+    if (err) {
+      logger.error("查询 crisis_flags 失败: " + err.message);
+      return res.status(500).json({ error: "查询失败" });
+    }
+    res.json(rows || []);
   });
 });
 

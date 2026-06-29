@@ -1483,6 +1483,20 @@
     }
 
     // ============ 模态框 ============
+    // 危机关怀浮层：发布命中危机关键词时温和递上求助资源（不拦截发布、不公开标注）
+    function showCrisisSupport() {
+      var modal = document.getElementById('crisis-modal');
+      if (!modal) return;
+      modal.classList.add('active');
+      document.body.classList.add('modal-open');
+    }
+    function closeCrisisSupport() {
+      var modal = document.getElementById('crisis-modal');
+      if (!modal) return;
+      modal.classList.remove('active');
+      document.body.classList.remove('modal-open');
+    }
+
     function openShareModal() {
       document.getElementById('share-modal').classList.add('active');
       document.body.classList.add('modal-open');
@@ -1680,11 +1694,13 @@
       }
 
       try {
-        await stableFetch(API_BASE + '/api/posts', { method: 'POST', body: formData });
+        var result = await stableFetch(API_BASE + '/api/posts', { method: 'POST', body: formData });
         closeShareModal();
         showToast('发布成功', 'success');
         resetAndLoadPosts();
         loadFeaturedPost();
+        // 命中危机关键词：发布后温和地递上求助资源（不拦截发布）
+        if (result && result.crisisSupport) showCrisisSupport();
       } catch (err) {
         showToast(err.message || '发布失败', 'error');
       } finally {
