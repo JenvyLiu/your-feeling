@@ -71,6 +71,9 @@
           case 'reveal-cw':
             if (id) revealCw(id);
             break;
+          case 'mood-channel':
+            selectMoodChannel(target.getAttribute('data-mood') || '');
+            break;
           case 'random-nickname':
             if (id) generateRandomNickname(id);
             break;
@@ -917,6 +920,54 @@
         });
         document.getElementById('digest-section').style.display = '';
       } catch (err) {}
+    }
+
+    // ============ 在线人数（陪伴感） ============
+    async function loadPresence() {
+      try {
+        var data = await stableFetch(API_BASE + '/api/presence', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fingerprint: userFingerprint })
+        });
+        var el = document.getElementById('online-indicator');
+        if (el && data && typeof data.online === 'number') {
+          el.textContent = '🟢 ' + data.online + ' 人在线';
+          el.style.display = '';
+        }
+      } catch (err) {}
+    }
+
+    // ============ 情绪流频道 ============
+    var moodChannels = [
+      { v: '', label: '全部', emoji: '🌈' },
+      { v: 'happy', label: '开心', emoji: '😊' },
+      { v: 'sad', label: '难过', emoji: '😢' },
+      { v: 'anxious', label: '焦虑', emoji: '😰' },
+      { v: 'calm', label: '平静', emoji: '😌' },
+      { v: 'love', label: '恋爱', emoji: '💖' },
+      { v: 'angry', label: '生气', emoji: '😠' },
+      { v: 'tired', label: '疲惫', emoji: '😫' },
+      { v: 'excited', label: '兴奋', emoji: '🤩' }
+    ];
+    function renderMoodChannels() {
+      var bar = document.getElementById('mood-channels');
+      if (!bar) return;
+      bar.innerHTML = '';
+      moodChannels.forEach(function(c) {
+        var chip = document.createElement('button');
+        chip.className = 'mood-channel' + (currentMood === c.v ? ' active' : '');
+        chip.textContent = c.emoji + ' ' + c.label;
+        chip.setAttribute('data-action', 'mood-channel');
+        chip.setAttribute('data-mood', c.v);
+        bar.appendChild(chip);
+      });
+    }
+    function selectMoodChannel(mood) {
+      currentMood = mood;
+      var sel = document.getElementById('mood-filter');
+      if (sel) sel.value = mood;
+      renderMoodChannels();
+      resetAndLoadPosts();
     }
 
     // ============ 管理面板 ============
@@ -1768,7 +1819,11 @@
     function openShareModal() {
       document.getElementById('share-modal').classList.add('active');
       document.body.classList.add('modal-open');
-      setTimeout(function() { document.getElementById('post-content').focus(); }, 100);
+      // 恢复未发送的草稿
+      var ta = document.getElementById('post-content');
+      var draft = localStorage.getItem('yf_draft');
+      if (ta && draft && !ta.value) { ta.value = draft; updateCharCount(); }
+      setTimeout(function() { ta.focus(); }, 100);
     }
 
     function closeShareModal() {
@@ -1811,6 +1866,17 @@
       }
     }
 
+    // 发布后按心情给一句共情回应
+    function empathyFor(mood) {
+      var m = {
+        happy: '你的快乐被看见了 ☀️', sad: '说出来，就轻一点了 🫂', angry: '你的情绪是合理的，谢谢你说出来',
+        anxious: '别怕，很多人和你一起 🌿', calm: '愿你一直这样平静 🍃', love: '愿这份心动被温柔以待 💕',
+        tired: '辛苦了，先好好歇一歇 🌙', excited: '为你高兴，继续闪光 ✨', confused: '慢慢来，答案会出现的',
+        grateful: '感恩的心很美 🌸'
+      };
+      return '发布成功 · ' + (m[mood] || '你的心声已被听见 🌿');
+    }
+
     function updateCharCount() {
       var textarea = document.getElementById('post-content');
       var count = document.getElementById('char-count');
@@ -1818,6 +1884,9 @@
       var len = textarea.value.length;
       count.textContent = len + ' 字';
       count.className = 'char-count absolute bottom-3 right-3';
+      // 草稿自动保存
+      if (textarea.value) localStorage.setItem('yf_draft', textarea.value);
+      else localStorage.removeItem('yf_draft');
     }
 
     function removeImage() {
@@ -1966,7 +2035,8 @@
       try {
         var result = await stableFetch(API_BASE + '/api/posts', { method: 'POST', body: formData });
         closeShareModal();
-        showToast('发布成功', 'success');
+        localStorage.removeItem('yf_draft');
+        showToast(empathyFor(mood), 'success');
         resetAndLoadPosts();
         loadFeaturedPost();
         bumpCounter('yf_post_count');
@@ -2045,11 +2115,14 @@
       setupInfiniteScroll();
       setupDragAndDrop();
       setupCtrlEnter();
+      renderMoodChannels();
       resetAndLoadPosts();
       loadCheckin();
       loadMoodWeather();
       loadFeaturedPost();
       loadPopularTags();
       loadDigest();
+      loadPresence();
+      setInterval(loadPresence, 60000);
     });
   

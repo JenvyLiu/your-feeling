@@ -1762,6 +1762,45 @@
       .checkin-streak-num { font-size: 1.4rem; }
     }
 
+    /* ============ 在线人数指示 ============ */
+    .online-indicator {
+      font-size: 0.66rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      vertical-align: middle;
+      margin-left: 6px;
+      white-space: nowrap;
+    }
+
+    /* ============ 情绪流频道 ============ */
+    .mood-channels {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-bottom: 14px;
+      scrollbar-width: none;
+    }
+    .mood-channels::-webkit-scrollbar { display: none; }
+    .mood-channel {
+      flex-shrink: 0;
+      font-size: 0.82rem;
+      color: var(--text-gray-300);
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .mood-channel:hover { background: var(--hover-bg-5); color: var(--text-primary); }
+    .mood-channel.active {
+      background: var(--accent-gradient);
+      color: #fff;
+      border-color: transparent;
+    }
+
     /* ============ 危机关怀浮层 ============ */
     .crisis-content {
       max-width: 440px;

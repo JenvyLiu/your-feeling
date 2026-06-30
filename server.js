@@ -896,6 +896,28 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// ============ 在线人数（内存计数，心跳 TTL，仅返回聚合数字） ============
+const presenceStore = new Map(); // fingerprint -> lastSeen(ms)
+const PRESENCE_TTL = 90 * 1000;
+function prunePresence(now) {
+  for (const [k, t] of presenceStore.entries()) {
+    if (now - t > PRESENCE_TTL) presenceStore.delete(k);
+  }
+}
+function presenceCount() {
+  const now = Date.now();
+  prunePresence(now);
+  return presenceStore.size;
+}
+app.post("/api/presence", (req, res) => {
+  const fp = String(req.body.fingerprint || "").substring(0, 100);
+  if (fp) presenceStore.set(fp, Date.now());
+  res.json({ online: presenceCount() });
+});
+app.get("/api/presence", (req, res) => {
+  res.json({ online: presenceCount() });
+});
+
 // 帖子总数统计 API
 app.get("/api/stats", (req, res) => {
   if (!dbReady) {
