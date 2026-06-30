@@ -1700,6 +1700,68 @@
       .mw-hero-emoji { font-size: 1.6rem; }
     }
 
+    /* ============ 情绪打卡 + 徽章 ============ */
+    .checkin-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-card);
+    }
+    .checkin-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .checkin-streak { display: flex; align-items: baseline; gap: 6px; }
+    .checkin-flame { font-size: 1.4rem; }
+    .checkin-streak-num { font-size: 1.6rem; font-weight: 800; color: var(--accent-orange); font-variant-numeric: tabular-nums; }
+    .checkin-streak-label { font-size: 0.82rem; color: var(--text-muted); }
+    .checkin-btn { width: auto; padding: 8px 20px; font-size: 0.88rem; white-space: nowrap; }
+    .checkin-btn.checked { opacity: 0.6; cursor: default; }
+    .checkin-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .badge-chip {
+      font-size: 0.74rem;
+      color: var(--text-gray-200);
+      background: var(--hover-bg-5);
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      padding: 3px 10px;
+    }
+    .badge-empty { font-size: 0.76rem; color: var(--text-muted); }
+
+    /* ============ 本周回顾 ============ */
+    .digest-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-card);
+    }
+    .digest-title { font-weight: 600; font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 10px; }
+    .digest-title .fa { color: var(--accent-purple); margin-right: 6px; }
+    .digest-sub { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; }
+    .digest-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .digest-item:hover { background: var(--hover-bg-5); }
+    .digest-rank { font-size: 1rem; flex-shrink: 0; width: 22px; text-align: center; }
+    .digest-text { flex: 1; font-size: 0.84rem; color: var(--text-gray-200); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .digest-likes { font-size: 0.76rem; color: var(--accent-pink); flex-shrink: 0; }
+    @media (max-width: 640px) {
+      .checkin-card { padding: 14px; }
+      .checkin-streak-num { font-size: 1.4rem; }
+    }
+
     /* ============ 危机关怀浮层 ============ */
     .crisis-content {
       max-width: 440px;

@@ -561,6 +561,20 @@ function initDatabase(database) {
       if (err) logger.error("创建crisis_flags表失败: " + err.message);
     });
 
+    // 情绪打卡表（每人每天一次，用服务端日期防作弊）
+    database.run(`
+      CREATE TABLE IF NOT EXISTS checkins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fingerprint TEXT NOT NULL,
+        day TEXT NOT NULL,
+        mood TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(fingerprint, day)
+      )
+    `, (err) => {
+      if (err) logger.error("创建checkins表失败: " + err.message);
+    });
+
     // 索引
     database.run("CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC)", (err) => {});
     database.run("CREATE INDEX IF NOT EXISTS idx_posts_mood ON posts(mood)", (err) => {});
@@ -586,6 +600,7 @@ function initDatabase(database) {
     database.run("CREATE INDEX IF NOT EXISTS idx_bookmarks_post ON bookmarks(post_id)", (err) => {});
     database.run("CREATE INDEX IF NOT EXISTS idx_bookmarks_fingerprint ON bookmarks(fingerprint)", (err) => {});
     database.run("CREATE INDEX IF NOT EXISTS idx_reactions_post ON post_reactions(post_id)", (err) => {});
+    database.run("CREATE INDEX IF NOT EXISTS idx_checkins_fp ON checkins(fingerprint, day DESC)", (err) => {});
 
     logger.info("数据库初始化完成");
     dbReady = true;
@@ -2224,6 +2239,79 @@ app.get("/api/admin/backup", checkAdmin, (req, res) => {
       if (derr && !res.headersSent) logger.error("备份下载失败: " + derr.message);
     });
   });
+});
+
+// ============ 情绪打卡 + 连续天数 streak ============
+function computeCheckinStats(fingerprint, cb) {
+  db.all("SELECT day FROM checkins WHERE fingerprint = ? ORDER BY day DESC LIMIT 120", [fingerprint], (err, rows) => {
+    if (err) return cb(err);
+    const daySet = new Set((rows || []).map(r => r.day));
+    db.get("SELECT date('now') AS today", (e2, t) => {
+      if (e2) return cb(e2);
+      const today = t.today;
+      const checkedToday = daySet.has(today);
+      let streak = 0;
+      const cursor = new Date(today + "T00:00:00Z");
+      if (!checkedToday) cursor.setUTCDate(cursor.getUTCDate() - 1); // 今天未打卡则从昨天起算，保留当日宽限
+      while (daySet.has(cursor.toISOString().slice(0, 10))) {
+        streak++;
+        cursor.setUTCDate(cursor.getUTCDate() - 1);
+      }
+      cb(null, { checkedToday: checkedToday, streak: streak, total: daySet.size });
+    });
+  });
+}
+
+app.get("/api/checkin", (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const fingerprint = String(req.query.fingerprint || "").substring(0, 100);
+  if (!fingerprint) return res.json({ checkedToday: false, streak: 0, total: 0 });
+  computeCheckinStats(fingerprint, (err, stats) => {
+    if (err) { logger.error("查询打卡失败: " + err.message); return res.status(500).json({ error: "查询失败" }); }
+    res.json(stats);
+  });
+});
+
+app.post("/api/checkin", rateLimit(60000, 20), (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const fingerprint = String(req.body.fingerprint || "").substring(0, 100);
+  const mood = req.body.mood ? String(req.body.mood).substring(0, 20) : null;
+  if (!fingerprint) return res.status(400).json({ error: "缺少标识" });
+  db.run("INSERT OR IGNORE INTO checkins (fingerprint, day, mood) VALUES (?, date('now'), ?)", [fingerprint, mood], (err) => {
+    if (err) { logger.error("打卡失败: " + err.message); return res.status(500).json({ error: "打卡失败" }); }
+    computeCheckinStats(fingerprint, (e2, stats) => {
+      if (e2) return res.status(500).json({ error: "打卡失败" });
+      res.json(stats);
+    });
+  });
+});
+
+// ============ 本周回顾 digest（站点级，聚合可缓存） ============
+app.get("/api/digest", (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const cacheKey = 'digest';
+  const cached = simpleCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < 300000) return res.json(cached.data);
+  db.get(
+    `SELECT COUNT(*) AS weekCount FROM posts
+     WHERE is_hidden = 0 AND (expires_at IS NULL OR expires_at > datetime('now'))
+       AND created_at >= datetime('now','-7 days')`,
+    (err, c) => {
+      if (err) { logger.error("digest计数失败: " + err.message); return res.status(500).json({ error: "查询失败" }); }
+      db.all(
+        `SELECT id, content, mood, like_count FROM posts
+         WHERE is_hidden = 0 AND (expires_at IS NULL OR expires_at > datetime('now'))
+           AND created_at >= datetime('now','-7 days')
+         ORDER BY like_count DESC, created_at DESC LIMIT 3`,
+        (err2, rows) => {
+          if (err2) { logger.error("digest查询失败: " + err2.message); return res.status(500).json({ error: "查询失败" }); }
+          const data = { weekCount: c ? c.weekCount : 0, top: rows || [] };
+          simpleCache.set(cacheKey, { data: data, timestamp: Date.now() });
+          res.json(data);
+        }
+      );
+    }
+  );
 });
 
 // ============ 管理员数据看板 API ============

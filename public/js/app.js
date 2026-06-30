@@ -291,6 +291,10 @@
           body: JSON.stringify({ fingerprint: userFingerprint, type: type })
         });
         applyReactionState(postId, data);
+        if (data && data.mine && data.mine.indexOf(type) !== -1) {
+          bumpCounter('yf_reaction_count');
+          if (checkinStats) renderBadges(checkinStats);
+        }
       } catch (err) {
         showToast(err.message || '操作失败', 'error');
       }
@@ -814,6 +818,104 @@
         });
 
         document.getElementById('mood-weather-section').style.display = '';
+      } catch (err) {}
+    }
+
+    // ============ 情绪打卡 + 成就徽章 ============
+    function bumpCounter(key) {
+      var n = parseInt(localStorage.getItem(key) || '0', 10) + 1;
+      localStorage.setItem(key, n);
+      return n;
+    }
+    function computeBadges(stats) {
+      var posts = parseInt(localStorage.getItem('yf_post_count') || '0', 10);
+      var reactions = parseInt(localStorage.getItem('yf_reaction_count') || '0', 10);
+      var streak = stats ? (stats.streak || 0) : 0;
+      var total = stats ? (stats.total || 0) : 0;
+      return [
+        { ok: total >= 1, emoji: '🌱', label: '打卡新人' },
+        { ok: streak >= 3, emoji: '✨', label: '坚持3天' },
+        { ok: streak >= 7, emoji: '🔥', label: '坚持一周' },
+        { ok: streak >= 30, emoji: '🏆', label: '月之约' },
+        { ok: posts >= 1, emoji: '🖊️', label: '首次发声' },
+        { ok: posts >= 5, emoji: '📣', label: '表达者' },
+        { ok: reactions >= 10, emoji: '🫶', label: '共情者' }
+      ].filter(function(b) { return b.ok; });
+    }
+    function renderBadges(stats) {
+      var box = document.getElementById('checkin-badges');
+      if (!box) return;
+      var earned = computeBadges(stats);
+      box.innerHTML = '';
+      if (!earned.length) {
+        box.innerHTML = '<span class="badge-empty">打卡、发声、共情，点亮你的第一个徽章 ✨</span>';
+        return;
+      }
+      earned.forEach(function(b) {
+        var chip = document.createElement('span');
+        chip.className = 'badge-chip';
+        chip.textContent = b.emoji + ' ' + b.label;
+        box.appendChild(chip);
+      });
+    }
+    var checkinStats = null;
+    function renderCheckin(stats) {
+      checkinStats = stats;
+      var numEl = document.getElementById('checkin-streak-num');
+      if (numEl) numEl.textContent = stats.streak || 0;
+      var btn = document.getElementById('checkin-btn');
+      if (btn) {
+        if (stats.checkedToday) { btn.textContent = '今日已打卡 ✓'; btn.disabled = true; btn.classList.add('checked'); }
+        else { btn.textContent = '今日打卡'; btn.disabled = false; btn.classList.remove('checked'); }
+      }
+      var card = document.getElementById('checkin-card');
+      if (card) card.style.display = '';
+      renderBadges(stats);
+    }
+    async function loadCheckin() {
+      try {
+        var stats = await stableFetch(API_BASE + '/api/checkin?fingerprint=' + encodeURIComponent(userFingerprint));
+        renderCheckin(stats);
+      } catch (err) {}
+    }
+    async function doCheckin() {
+      try {
+        var stats = await stableFetch(API_BASE + '/api/checkin', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fingerprint: userFingerprint })
+        });
+        renderCheckin(stats);
+        showToast('打卡成功，连续 ' + (stats.streak || 1) + ' 天 🔥', 'success');
+      } catch (err) { showToast(err.message || '打卡失败', 'error'); }
+    }
+
+    // ============ 本周回顾 ============
+    async function loadDigest() {
+      try {
+        var data = await stableFetch(API_BASE + '/api/digest');
+        if (!data || !data.top || !data.top.length) return;
+        var sub = document.getElementById('digest-sub');
+        if (sub) sub.textContent = '· 近7天 ' + (data.weekCount || 0) + ' 条心声';
+        var list = document.getElementById('digest-list');
+        list.innerHTML = '';
+        data.top.forEach(function(p, idx) {
+          var item = document.createElement('div');
+          item.className = 'digest-item';
+          item.setAttribute('data-action', 'goto-post');
+          item.setAttribute('data-id', p.id);
+          var rank = document.createElement('span');
+          rank.className = 'digest-rank';
+          rank.textContent = ['🥇', '🥈', '🥉'][idx] || String(idx + 1);
+          var txt = document.createElement('span');
+          txt.className = 'digest-text';
+          txt.textContent = String(p.content || '').replace(/\s+/g, ' ').slice(0, 36);
+          var likes = document.createElement('span');
+          likes.className = 'digest-likes';
+          likes.textContent = '❤ ' + (p.like_count || 0);
+          item.appendChild(rank); item.appendChild(txt); item.appendChild(likes);
+          list.appendChild(item);
+        });
+        document.getElementById('digest-section').style.display = '';
       } catch (err) {}
     }
 
@@ -1867,6 +1969,8 @@
         showToast('发布成功', 'success');
         resetAndLoadPosts();
         loadFeaturedPost();
+        bumpCounter('yf_post_count');
+        if (checkinStats) renderBadges(checkinStats);
         // 命中危机关键词：发布后温和地递上求助资源（不拦截发布）
         if (result && result.crisisSupport) showCrisisSupport();
       } catch (err) {
@@ -1942,8 +2046,10 @@
       setupDragAndDrop();
       setupCtrlEnter();
       resetAndLoadPosts();
+      loadCheckin();
       loadMoodWeather();
       loadFeaturedPost();
       loadPopularTags();
+      loadDigest();
     });
   
