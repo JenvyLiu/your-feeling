@@ -1550,11 +1550,18 @@ app.post("/api/posts/:id/report", rateLimit(60000, 10), (req, res) => {
           return res.status(500).json({ error: "举报失败，请重试" });
         }
 
-        // 如果举报数>=3，自动隐藏帖子
+        // 举报分级：举报数>=3 考虑自动隐藏，但疑似求助/危机内容绝不自动隐藏
+        // （避免最该被看见的自伤求助帖被恶意举报淹没；改为保留并提示管理员人工优先处理）
         db.get("SELECT COUNT(*) as count FROM reports WHERE post_id = ?", [postId], (err, row) => {
           if (row && row.count >= 3) {
-            db.run("UPDATE posts SET is_hidden = 1 WHERE id = ?", [postId]);
-            logger.info(`帖子 ${postId} 因举报过多已被自动隐藏`);
+            db.get("SELECT content FROM posts WHERE id = ?", [postId], (e2, p2) => {
+              if (p2 && detectCrisis(p2.content)) {
+                logger.warn(`帖子 ${postId} 举报达阈值但疑似求助内容，已豁免自动隐藏，待管理员人工处理`);
+              } else {
+                db.run("UPDATE posts SET is_hidden = 1 WHERE id = ?", [postId]);
+                logger.info(`帖子 ${postId} 因举报过多已被自动隐藏`);
+              }
+            });
           }
         });
 

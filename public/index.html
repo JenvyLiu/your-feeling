@@ -24,7 +24,7 @@
   <title>Your Feeling - 匿名分享你的心声</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/vendor/font-awesome/css/font-awesome.min.css">
-  <link rel="stylesheet" href="/css/style.css?v=3">
+  <link rel="stylesheet" href="/css/style.css?v=4">
 </head>
 <body>
 
@@ -49,6 +49,17 @@
       <button id="report-submit-btn" class="btn-primary" style="width: 100%;" onclick="submitReport()">
         <i class="fa fa-paper-plane"></i> 提交举报
       </button>
+    </div>
+  </div>
+
+  <!-- 首访软性年龄提示 + 关怀 -->
+  <div id="age-gate" class="age-gate" style="display:none;" role="dialog" aria-modal="true" aria-label="进入提示">
+    <div class="age-gate-box">
+      <div class="age-gate-emoji">🌙</div>
+      <h3 class="age-gate-title">欢迎来到 Your Feeling</h3>
+      <p class="age-gate-text">这是一个匿名情绪倾诉社区，内容可能涉及成人或敏感话题。请确认你已年满 18 岁。</p>
+      <p class="age-gate-care">如果你正经历困扰，或有伤害自己的念头——你不是一个人。全国24小时心理援助热线 <b>400-161-9995</b>，北京心理危机干预 <b>010-82951332</b>。</p>
+      <button class="btn-primary age-gate-btn" onclick="acceptAgeGate()">我已满 18 岁，进入</button>
     </div>
   </div>
 
@@ -104,6 +115,7 @@
 
     <!-- 情绪打卡 -->
     <section id="checkin-card" class="checkin-card" style="display: none;" aria-label="情绪打卡">
+      <div class="checkin-identity" id="checkin-identity"></div>
       <div class="checkin-main">
         <div class="checkin-streak">
           <span class="checkin-flame" id="checkin-flame">🔥</span>
@@ -384,7 +396,7 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=3"></script>
+  <script src="/js/app.js?v=4"></script>
 
   <!-- 悬浮音乐播放器 -->
   <div class="music-player collapsed" id="music-player">
@@ -422,6 +434,6 @@
     <span class="drag-hint" id="drag-hint">拖拽移动 · 上下滑调音量</span>
   </div>
 
-  <script src="/js/music.js?v=3"></script>
+  <script src="/js/music.js?v=4"></script>
 </body>
 </html>

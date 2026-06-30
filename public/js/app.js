@@ -874,6 +874,7 @@
       var card = document.getElementById('checkin-card');
       if (card) card.style.display = '';
       renderBadges(stats);
+      renderIdentity();
     }
     async function loadCheckin() {
       try {
@@ -890,6 +891,55 @@
         renderCheckin(stats);
         showToast('打卡成功，连续 ' + (stats.streak || 1) + ' 天 🔥', 'success');
       } catch (err) { showToast(err.message || '打卡失败', 'error'); }
+    }
+
+    // ============ 匿名身份名片 ============
+    var idAdjectives = ['温柔的', '沉默的', '勇敢的', '自由的', '孤独的', '神秘的', '清澈的', '温暖的', '璀璨的', '深邃的', '轻盈的', '淡然的', '坚定的', '朦胧的', '安静的', '浪漫的'];
+    var idNouns = ['星空', '海风', '月光', '晚霞', '微光', '雨夜', '山谷', '银河', '萤火', '深海', '晨雾', '北极星', '蒲公英', '灯塔', '潮汐', '云端'];
+    function myIdentity() {
+      var h = hashSeed(userFingerprint);
+      return {
+        name: idAdjectives[h % idAdjectives.length] + idNouns[Math.floor(h / 7) % idNouns.length],
+        emoji: avatarAnimals[Math.floor(h / 3) % avatarAnimals.length],
+        color: avatarColors[Math.floor(h / 13) % avatarColors.length]
+      };
+    }
+    function renderIdentity() {
+      var box = document.getElementById('checkin-identity');
+      if (!box) return;
+      var id = myIdentity();
+      box.innerHTML = '';
+      var av = document.createElement('span'); av.className = 'id-avatar'; av.style.background = id.color; av.textContent = id.emoji;
+      var mid = document.createElement('span'); mid.className = 'id-mid';
+      var nm = document.createElement('span'); nm.className = 'id-name'; nm.textContent = id.name;
+      var lb = document.createElement('span'); lb.className = 'id-label'; lb.textContent = '你的匿名身份';
+      mid.appendChild(nm); mid.appendChild(lb);
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'id-change'; btn.textContent = '换新身份';
+      btn.onclick = changeIdentity;
+      box.appendChild(av); box.appendChild(mid); box.appendChild(btn);
+    }
+    function changeIdentity() {
+      if (!confirm('换新身份后你将以全新匿名身份出现，并失去当前身份的打卡、徽章与通知。确定吗？')) return;
+      var newFp = 'fp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('user_fingerprint', newFp);
+      localStorage.removeItem('yf_post_count');
+      localStorage.removeItem('yf_reaction_count');
+      location.reload();
+    }
+
+    // ============ 首访软性年龄提示 ============
+    function acceptAgeGate() {
+      localStorage.setItem('yf_age_ok', '1');
+      var g = document.getElementById('age-gate');
+      if (g) g.style.display = 'none';
+      document.body.classList.remove('modal-open');
+    }
+    function maybeShowAgeGate() {
+      if (localStorage.getItem('yf_age_ok')) return;
+      var g = document.getElementById('age-gate');
+      if (!g) return;
+      g.style.display = 'flex';
+      document.body.classList.add('modal-open');
     }
 
     // ============ 本周回顾 ============
@@ -2184,6 +2234,7 @@
       setupInfiniteScroll();
       setupDragAndDrop();
       setupCtrlEnter();
+      maybeShowAgeGate();
       renderMoodChannels();
       resetAndLoadPosts();
       loadCheckin();
