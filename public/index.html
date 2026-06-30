@@ -24,7 +24,7 @@
   <title>Your Feeling - 匿名分享你的心声</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/vendor/font-awesome/css/font-awesome.min.css">
-  <link rel="stylesheet" href="/css/style.css?v=2">
+  <link rel="stylesheet" href="/css/style.css?v=3">
 </head>
 <body>
 
@@ -52,6 +52,18 @@
     </div>
   </div>
 
+  <!-- 互动通知面板 -->
+  <div id="notif-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="互动通知">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-header">
+        <span class="modal-title"><i class="fa fa-bell-o" aria-hidden="true"></i> 互动通知</span>
+        <button class="modal-close" onclick="closeNotifications()" aria-label="关闭"><i class="fa fa-times" aria-hidden="true"></i></button>
+      </div>
+      <div id="notif-list" class="notif-list"></div>
+      <p class="notif-hint">通知按本设备的匿名身份保存，清缓存或更换设备会失联</p>
+    </div>
+  </div>
+
   <!-- 顶部导航栏 -->
   <nav class="navbar">
     <div class="navbar-inner">
@@ -76,6 +88,7 @@
           <option value="excited">🤩 兴奋</option>
         </select>
         <button class="nav-btn" id="drift-btn" onclick="openDrift()" aria-label="漂流瓶·随机看一条心声" title="漂流瓶 · 随机看一条"><i class="fa fa-life-ring" aria-hidden="true"></i></button>
+        <button class="nav-btn nav-btn-notif" id="notif-btn" onclick="openNotifications()" aria-label="互动通知" title="通知"><i class="fa fa-bell-o" aria-hidden="true"></i><span class="notif-badge" id="notif-badge" style="display:none;">0</span></button>
         <button class="nav-btn" id="bookmarks-btn" onclick="toggleBookmarksView()" aria-label="我的收藏" title="我的收藏"><i class="fa fa-bookmark" aria-hidden="true"></i></button>
         <button class="nav-btn" id="admin-btn" onclick="openAdminModal()" aria-label="管理面板" title="管理面板"><i class="fa fa-shield" aria-hidden="true"></i></button>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换深色/浅色主题" title="切换主题"><i class="fa fa-moon-o" id="theme-icon" aria-hidden="true"></i></button>
@@ -371,7 +384,7 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=2"></script>
+  <script src="/js/app.js?v=3"></script>
 
   <!-- 悬浮音乐播放器 -->
   <div class="music-player collapsed" id="music-player">
@@ -409,6 +422,6 @@
     <span class="drag-hint" id="drag-hint">拖拽移动 · 上下滑调音量</span>
   </div>
 
-  <script src="/js/music.js?v=2"></script>
+  <script src="/js/music.js?v=3"></script>
 </body>
 </html>

@@ -409,6 +409,12 @@ function initDatabase(database) {
           else logger.info("已添加 posts.is_sensitive 列");
         });
       }
+      if (!columnNames.includes('author_fingerprint')) {
+        database.run("ALTER TABLE posts ADD COLUMN author_fingerprint TEXT", (err) => {
+          if (err) logger.error("添加 author_fingerprint 列失败: " + err.message);
+          else logger.info("已添加 posts.author_fingerprint 列");
+        });
+      }
       if (!columnNames.includes('tags')) {
         database.run("ALTER TABLE posts ADD COLUMN tags TEXT", (err) => {
           if (err) logger.error("添加 tags 列失败: " + err.message);
@@ -575,6 +581,22 @@ function initDatabase(database) {
       if (err) logger.error("创建checkins表失败: " + err.message);
     });
 
+    // 互动通知表（收件人=帖子作者 fingerprint；仅本人凭指纹可见）
+    database.run(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipient TEXT NOT NULL,
+        type TEXT NOT NULL,
+        post_id INTEGER,
+        actor_seed TEXT,
+        snippet TEXT,
+        is_read INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `, (err) => {
+      if (err) logger.error("创建notifications表失败: " + err.message);
+    });
+
     // 索引
     database.run("CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC)", (err) => {});
     database.run("CREATE INDEX IF NOT EXISTS idx_posts_mood ON posts(mood)", (err) => {});
@@ -601,6 +623,7 @@ function initDatabase(database) {
     database.run("CREATE INDEX IF NOT EXISTS idx_bookmarks_fingerprint ON bookmarks(fingerprint)", (err) => {});
     database.run("CREATE INDEX IF NOT EXISTS idx_reactions_post ON post_reactions(post_id)", (err) => {});
     database.run("CREATE INDEX IF NOT EXISTS idx_checkins_fp ON checkins(fingerprint, day DESC)", (err) => {});
+    database.run("CREATE INDEX IF NOT EXISTS idx_notif_recipient ON notifications(recipient, is_read, created_at DESC)", (err) => {});
 
     logger.info("数据库初始化完成");
     dbReady = true;
@@ -1455,9 +1478,10 @@ app.post("/api/posts", rateLimit(60000, 10), uploadHandle.single("image"), (req,
   // 危机内容识别（基于原始内容；仅用于温和提示求助资源，不拦截发布）
   const crisisMatch = detectCrisis(content);
 
+  const authorFp = String(req.body.fingerprint || "").substring(0, 100) || null;
   db.run(
-    "INSERT INTO posts (content, image_url, link_url, mood, expires_at, tags, is_sensitive) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [filteredContent, image_url, safe_link_url, safe_mood, expires_at, cleanTags, isSensitive],
+    "INSERT INTO posts (content, image_url, link_url, mood, expires_at, tags, is_sensitive, author_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [filteredContent, image_url, safe_link_url, safe_mood, expires_at, cleanTags, isSensitive, authorFp],
     function(err) {
       if (err) {
         logger.error("发布帖子失败: " + err.message);
@@ -1604,6 +1628,7 @@ app.post("/api/posts/:id/like", rateLimit(60000, 30), (req, res) => {
         }
         db.run("UPDATE posts SET like_count = like_count + 1 WHERE id = ?", [postId], (err) => {
           if (err) logger.error("更新点赞数失败: " + err.message);
+          notifyPostAuthor(postId, fingerprint, 'like', null);
           // 返回最新的 like_count（从 posts 表读保证准确）
           db.get("SELECT like_count FROM posts WHERE id = ?", [postId], (err2, post) => {
             invalidateWriteCaches();
@@ -1693,6 +1718,7 @@ app.post("/api/posts/:id/reactions", rateLimit(60000, 60), (req, res) => {
         if (!post) return res.status(404).json({ error: "帖子不存在" });
         db.run("INSERT INTO post_reactions (post_id, fingerprint, reaction_type) VALUES (?, ?, ?)", [postId, fingerprint, type], (e) => {
           if (e && !(e.message && e.message.includes("UNIQUE"))) { logger.error("添加反应失败: " + e.message); return res.status(500).json({ error: "操作失败" }); }
+          if (!e) notifyPostAuthor(postId, fingerprint, 'reaction', type);
           respond();
         });
       });
@@ -1787,6 +1813,9 @@ app.post("/api/posts/:id/comments", rateLimit(60000, 20), (req, res) => {
   }
 
   const filteredContent = filterBadWords(content);
+
+  // 通知帖子作者：有人评论了你的心声
+  notifyPostAuthor(postId, req.body.fingerprint, 'comment', content);
 
   // 如果有 parent_id，验证父评论存在且属于同一帖子
   if (parentId) {
@@ -2334,6 +2363,47 @@ app.get("/api/digest", (req, res) => {
       );
     }
   );
+});
+
+// ============ 互动通知 ============
+// 给帖子作者写一条通知（actor 即触发者，匿名化为该帖头像 seed；不通知作者本人）
+function notifyPostAuthor(postId, actorFingerprint, type, snippet) {
+  if (!postId || !dbReady) return;
+  db.get("SELECT author_fingerprint FROM posts WHERE id = ?", [postId], (err, row) => {
+    if (err || !row || !row.author_fingerprint) return;
+    if (row.author_fingerprint === actorFingerprint) return;
+    const actorSeed = deriveAuthorSeed(postId, actorFingerprint || "anon");
+    db.run(
+      "INSERT INTO notifications (recipient, type, post_id, actor_seed, snippet) VALUES (?, ?, ?, ?, ?)",
+      [row.author_fingerprint, type, postId, actorSeed, String(snippet || "").substring(0, 60)],
+      (e) => { if (e) logger.error("写入通知失败: " + e.message); }
+    );
+  });
+}
+
+app.get("/api/notifications", (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const fp = String(req.query.fingerprint || "").substring(0, 100);
+  if (!fp) return res.json({ unread: 0, items: [] });
+  db.all(
+    "SELECT id, type, post_id, actor_seed, snippet, is_read, created_at FROM notifications WHERE recipient = ? ORDER BY created_at DESC LIMIT 30",
+    [fp],
+    (err, rows) => {
+      if (err) { logger.error("查询通知失败: " + err.message); return res.status(500).json({ error: "查询失败" }); }
+      const items = rows || [];
+      res.json({ unread: items.filter(n => !n.is_read).length, items: items });
+    }
+  );
+});
+
+app.post("/api/notifications/read", (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const fp = String(req.body.fingerprint || "").substring(0, 100);
+  if (!fp) return res.status(400).json({ error: "缺少标识" });
+  db.run("UPDATE notifications SET is_read = 1 WHERE recipient = ? AND is_read = 0", [fp], (err) => {
+    if (err) { logger.error("标记已读失败: " + err.message); return res.status(500).json({ error: "操作失败" }); }
+    res.json({ success: true });
+  });
 });
 
 // ============ 管理员数据看板 API ============

@@ -970,6 +970,74 @@
       resetAndLoadPosts();
     }
 
+    // ============ 互动通知 ============
+    var notifItems = [];
+    var notifTypeText = { comment: '评论了你的心声', like: '点赞了你的心声', reaction: '回应了你的心声' };
+    async function loadNotifications() {
+      try {
+        var data = await stableFetch(API_BASE + '/api/notifications?fingerprint=' + encodeURIComponent(userFingerprint));
+        notifItems = data.items || [];
+        var badge = document.getElementById('notif-badge');
+        if (badge) {
+          if (data.unread > 0) { badge.textContent = data.unread > 99 ? '99+' : String(data.unread); badge.style.display = ''; }
+          else badge.style.display = 'none';
+        }
+      } catch (err) {}
+    }
+    function renderNotifications() {
+      var list = document.getElementById('notif-list');
+      if (!list) return;
+      list.innerHTML = '';
+      if (!notifItems.length) { list.innerHTML = '<p class="notif-empty">还没有互动通知，发条心声等回应吧 🌱</p>'; return; }
+      notifItems.forEach(function(n) {
+        var av = seedToAvatar(n.actor_seed);
+        var row = document.createElement('div');
+        row.className = 'notif-item' + (n.is_read ? '' : ' unread');
+        var avatar = document.createElement('span');
+        avatar.className = 'notif-avatar';
+        avatar.style.background = av.color;
+        avatar.textContent = av.emoji;
+        var body = document.createElement('div');
+        body.className = 'notif-body';
+        var line = document.createElement('div');
+        line.className = 'notif-line';
+        line.textContent = '有人' + (notifTypeText[n.type] || '与你互动');
+        body.appendChild(line);
+        if (n.snippet) {
+          var snip = document.createElement('div');
+          snip.className = 'notif-snippet';
+          snip.textContent = n.snippet;
+          body.appendChild(snip);
+        }
+        var time = document.createElement('div');
+        time.className = 'notif-time';
+        time.textContent = formatTime(n.created_at);
+        body.appendChild(time);
+        row.appendChild(avatar);
+        row.appendChild(body);
+        if (n.post_id) {
+          row.style.cursor = 'pointer';
+          row.onclick = function() { closeNotifications(); gotoPost(n.post_id); };
+        }
+        list.appendChild(row);
+      });
+    }
+    function openNotifications() {
+      renderNotifications();
+      document.getElementById('notif-modal').classList.add('active');
+      document.body.classList.add('modal-open');
+      stableFetch(API_BASE + '/api/notifications/read', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint: userFingerprint })
+      }).then(function() {
+        var b = document.getElementById('notif-badge'); if (b) b.style.display = 'none';
+      }).catch(function() {});
+    }
+    function closeNotifications() {
+      document.getElementById('notif-modal').classList.remove('active');
+      document.body.classList.remove('modal-open');
+    }
+
     // ============ 管理面板 ============
     var adminCurrentPage = 1;
     var adminPageSize = 10;
@@ -2015,6 +2083,7 @@
 
       var formData = new FormData();
       formData.append('content', document.getElementById('post-content').value);
+      formData.append('fingerprint', userFingerprint);
       var mood = document.getElementById('selected-mood').value;
       if (mood) formData.append('mood', mood);
       var expiry = document.getElementById('selected-expiry').value;
@@ -2124,5 +2193,7 @@
       loadDigest();
       loadPresence();
       setInterval(loadPresence, 60000);
+      loadNotifications();
+      setInterval(loadNotifications, 60000);
     });
   
