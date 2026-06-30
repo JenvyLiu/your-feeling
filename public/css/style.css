@@ -1905,6 +1905,32 @@
     .age-gate-care b { color: var(--accent-orange); }
     .age-gate-btn { width: 100%; margin-top: 6px; }
 
+    /* ============ 帖子正文 Markdown ============ */
+    .post-content strong { font-weight: 700; color: var(--text-primary); }
+    .post-content em { font-style: italic; }
+    .post-content code {
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 0.86em;
+      background: var(--hover-bg-10);
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+    .post-content a { color: var(--link-color); text-decoration: underline; word-break: break-all; }
+    .post-content a:hover { color: var(--link-hover); }
+
+    /* ============ 节日横幅 ============ */
+    .festival-banner {
+      text-align: center;
+      font-size: 0.86rem;
+      color: #fff;
+      background: var(--accent-gradient);
+      border-radius: 12px;
+      padding: 8px 14px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-card);
+    }
+    body[data-festival="1"] .navbar-title { text-shadow: 0 0 12px rgba(251, 146, 60, 0.4); }
+
     /* ============ 危机关怀浮层 ============ */
     .crisis-content {
       max-width: 440px;

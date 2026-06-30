@@ -455,14 +455,25 @@
       return html;
     }
 
-    // 根据 post.id 数组,把帖子内容以 textContent 方式写入对应 .post-content 元素
-    // 这样彻底阻断基于 HTML 拼接的 XSS 路径。
+    // 极简安全 Markdown：先整体 HTML 转义，再在转义后的文本上套用有限标记，杜绝 XSS
+    function renderMarkdown(text) {
+      var s = escapeHtml(String(text || ''));
+      s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+      s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+      // 链接 [文字](http(s)://...)，href 取自已转义文本，引号已成 &quot; 无法逃逸属性
+      s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      s = s.replace(/\n/g, '<br>');
+      return s;
+    }
+
+    // 把帖子正文写入 .post-content：用 escape-first 的安全 Markdown，仍彻底阻断 XSS
     function setPostContents(posts) {
       if (!posts || !posts.length) return;
       for (var i = 0; i < posts.length; i++) {
         var post = posts[i];
         var contentEl = document.querySelector('#post-' + post.id + ' > .post-content');
-        if (contentEl) contentEl.textContent = post.content || '';
+        if (contentEl) contentEl.innerHTML = renderMarkdown(post.content || '');
       }
     }
 
@@ -925,6 +936,31 @@
       localStorage.removeItem('yf_post_count');
       localStorage.removeItem('yf_reaction_count');
       location.reload();
+    }
+
+    // ============ 节日主题 ============
+    function currentFestival() {
+      var d = new Date();
+      var key = (d.getMonth() + 1) + '-' + d.getDate();
+      var map = {
+        '1-1': { emoji: '🎆', text: '新年快乐，愿新的一年被温柔以待' },
+        '2-14': { emoji: '💝', text: '情人节，愿你被爱，也好好爱自己' },
+        '5-20': { emoji: '💌', text: '今天，愿你勇敢说出心动' },
+        '6-1': { emoji: '🎈', text: '儿童节快乐，永远保有一点童心' },
+        '10-1': { emoji: '🎉', text: '国庆快乐' },
+        '12-24': { emoji: '🎄', text: '平安夜，愿你被温柔包围' },
+        '12-25': { emoji: '🎄', text: '圣诞快乐' },
+        '12-31': { emoji: '🎆', text: '跨年夜，谢谢今年的每一种情绪' }
+      };
+      return map[key] || null;
+    }
+    function applyFestival() {
+      var f = currentFestival();
+      var bar = document.getElementById('festival-banner');
+      if (!f || !bar) return;
+      bar.textContent = f.emoji + ' ' + f.text + ' ' + f.emoji;
+      bar.style.display = '';
+      document.body.setAttribute('data-festival', '1');
     }
 
     // ============ 首访软性年龄提示 ============
@@ -2235,6 +2271,7 @@
       setupDragAndDrop();
       setupCtrlEnter();
       maybeShowAgeGate();
+      applyFestival();
       renderMoodChannels();
       resetAndLoadPosts();
       loadCheckin();
