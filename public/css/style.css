@@ -1931,6 +1931,30 @@
     }
     body[data-festival="1"] .navbar-title { text-shadow: 0 0 12px rgba(251, 146, 60, 0.4); }
 
+    /* ============ 话题订阅 ============ */
+    .tag-wrap { display: inline-flex; align-items: center; gap: 2px; margin: 0 6px 6px 0; }
+    .tag-sub {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted); font-size: 0.85rem; padding: 0 2px; line-height: 1;
+    }
+    .tag-sub.subbed { color: var(--accent-orange); }
+    .tag-sub:hover { color: var(--accent-orange); }
+
+    /* ============ 我的报告入口 ============ */
+    .report-entry {
+      margin-top: 12px;
+      width: 100%;
+      background: var(--hover-bg-5);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      color: var(--text-gray-200);
+      font-size: 0.84rem;
+      padding: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .report-entry:hover { background: var(--hover-bg-10); color: var(--text-primary); }
+
     /* ============ 危机关怀浮层 ============ */
     .crisis-content {
       max-width: 440px;

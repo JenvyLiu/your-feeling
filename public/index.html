@@ -24,7 +24,7 @@
   <title>Your Feeling - 匿名分享你的心声</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/vendor/font-awesome/css/font-awesome.min.css">
-  <link rel="stylesheet" href="/css/style.css?v=5">
+  <link rel="stylesheet" href="/css/style.css?v=6">
 </head>
 <body>
 
@@ -49,6 +49,19 @@
       <button id="report-submit-btn" class="btn-primary" style="width: 100%;" onclick="submitReport()">
         <i class="fa fa-paper-plane"></i> 提交举报
       </button>
+    </div>
+  </div>
+
+  <!-- 我的情绪报告（可保存为图分享） -->
+  <div id="report-modal-card" class="modal-overlay" role="dialog" aria-modal="true" aria-label="我的情绪报告">
+    <div class="modal-content" style="max-width: 380px;">
+      <div class="modal-header">
+        <span class="modal-title">📊 我的情绪报告</span>
+        <button class="modal-close" onclick="closeMyReport()" aria-label="关闭"><i class="fa fa-times" aria-hidden="true"></i></button>
+      </div>
+      <canvas id="report-canvas" width="640" height="800" style="width:100%; border-radius:12px; display:block;"></canvas>
+      <button class="btn-primary" style="width:100%; margin-top:12px;" onclick="downloadReportCard()"><i class="fa fa-download" aria-hidden="true"></i> 保存为图片分享</button>
+      <p class="notif-hint">数据来自本设备匿名身份的打卡与发帖</p>
     </div>
   </div>
 
@@ -128,6 +141,7 @@
         <button class="btn-primary checkin-btn" id="checkin-btn" onclick="doCheckin()">今日打卡</button>
       </div>
       <div class="checkin-badges" id="checkin-badges"></div>
+      <button class="report-entry" id="report-entry" onclick="openMyReport()">📊 我的情绪报告</button>
     </section>
 
     <!-- 社区情绪天气 -->
@@ -399,7 +413,7 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=5"></script>
+  <script src="/js/app.js?v=6"></script>
 
   <!-- 悬浮音乐播放器 -->
   <div class="music-player collapsed" id="music-player">
@@ -437,6 +451,6 @@
     <span class="drag-hint" id="drag-hint">拖拽移动 · 上下滑调音量</span>
   </div>
 
-  <script src="/js/music.js?v=5"></script>
+  <script src="/js/music.js?v=6"></script>
 </body>
 </html>

@@ -2372,6 +2372,26 @@ app.get("/api/digest", (req, res) => {
   );
 });
 
+// ============ 我的情绪报告（个人数据，凭 fingerprint） ============
+app.get("/api/my-report", (req, res) => {
+  if (!dbReady) return res.status(503).json({ error: "服务暂不可用，请稍后重试" });
+  const fp = String(req.query.fingerprint || "").substring(0, 100);
+  if (!fp) return res.json({ checkins: 0, streak: 0, posts: 0, moods: [] });
+  computeCheckinStats(fp, (err, stats) => {
+    const checkins = (stats && stats.total) || 0;
+    const streak = (stats && stats.streak) || 0;
+    db.all(
+      "SELECT mood, COUNT(*) AS count FROM checkins WHERE fingerprint = ? AND mood IS NOT NULL AND mood != '' GROUP BY mood ORDER BY count DESC",
+      [fp],
+      (e1, moodRows) => {
+        db.get("SELECT COUNT(*) AS c FROM posts WHERE author_fingerprint = ?", [fp], (e2, p) => {
+          res.json({ checkins: checkins, streak: streak, posts: (p && p.c) || 0, moods: moodRows || [] });
+        });
+      }
+    );
+  });
+});
+
 // ============ 互动通知 ============
 // 给帖子作者写一条通知（actor 即触发者，匿名化为该帖头像 seed；不通知作者本人）
 function notifyPostAuthor(postId, actorFingerprint, type, snippet) {

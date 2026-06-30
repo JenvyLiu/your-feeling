@@ -74,6 +74,9 @@
           case 'mood-channel':
             selectMoodChannel(target.getAttribute('data-mood') || '');
             break;
+          case 'share-card':
+            if (id) sharePostCard(id);
+            break;
           case 'random-nickname':
             if (id) generateRandomNickname(id);
             break;
@@ -413,6 +416,7 @@
       html += '<i class="fa fa-bookmark"></i>';
       html += '<span id="bookmark-count-' + post.id + '">' + (post.bookmark_count || 0) + '</span></button>';
       html += '<button type="button" class="action-btn" aria-label="举报帖子" data-action="open-report" data-id="' + post.id + '"><i class="fa fa-flag-o"></i></button>';
+      html += '<button type="button" class="action-btn" aria-label="生成分享图" title="生成分享图" data-action="share-card" data-id="' + post.id + '"><i class="fa fa-share-alt"></i></button>';
       if (isAdminMode) {
         html += '<button class="action-btn" aria-label="删除帖子" data-action="delete-post" data-id="' + post.id + '" style="color: var(--danger);"><i class="fa fa-trash"></i></button>';
       }
@@ -750,18 +754,45 @@
     }
 
     // ============ 热门标签 ============
+    function getSubbedTags() { try { return JSON.parse(localStorage.getItem('yf_subbed_tags') || '[]'); } catch (e) { return []; } }
+    function setSubbedTags(arr) { localStorage.setItem('yf_subbed_tags', JSON.stringify(arr.slice(0, 30))); }
+    function toggleSubTag(tag) {
+      var subs = getSubbedTags();
+      var i = subs.indexOf(tag);
+      if (i >= 0) subs.splice(i, 1); else subs.push(tag);
+      setSubbedTags(subs);
+      loadPopularTags();
+      showToast(i >= 0 ? '已取消订阅 #' + tag : '已订阅 #' + tag + '，回访可在此快速进入', 'success');
+    }
     async function loadPopularTags() {
       try {
         var tags = await stableFetch(API_BASE + '/api/tags/popular');
         if (!tags || !Array.isArray(tags) || tags.length === 0) return;
+        var subs = getSubbedTags();
         var section = document.getElementById('popular-tags-section');
         var list = document.getElementById('popular-tags-list');
-        var html = '';
-        for (var i = 0; i < tags.length; i++) {
-          var tagLabel = tags[i].tag || tags[i];
-          html += '<span class="tag" data-action="filter-tag" data-tag="' + escapeHtml(tagLabel) + '">#' + escapeHtml(tagLabel) + '</span>';
-        }
-        list.innerHTML = html;
+        list.innerHTML = '';
+        tags.forEach(function(t) {
+          var label = (t && (t.name || t.tag)) || t; // 兼容 {name,count} / {tag} / 字符串
+          if (typeof label !== 'string') return;
+          var wrap = document.createElement('span');
+          wrap.className = 'tag-wrap';
+          var tag = document.createElement('span');
+          tag.className = 'tag';
+          tag.setAttribute('data-action', 'filter-tag');
+          tag.setAttribute('data-tag', label);
+          tag.textContent = '#' + label;
+          var star = document.createElement('button');
+          star.type = 'button';
+          star.className = 'tag-sub' + (subs.indexOf(label) >= 0 ? ' subbed' : '');
+          star.textContent = subs.indexOf(label) >= 0 ? '★' : '☆';
+          star.title = '订阅 / 取消订阅该话题';
+          star.setAttribute('aria-label', '订阅话题 ' + label);
+          star.onclick = function(e) { e.stopPropagation(); toggleSubTag(label); };
+          wrap.appendChild(tag);
+          wrap.appendChild(star);
+          list.appendChild(wrap);
+        });
         section.style.display = '';
       } catch (err) {}
     }
@@ -976,6 +1007,96 @@
       if (!g) return;
       g.style.display = 'flex';
       document.body.classList.add('modal-open');
+    }
+
+    // ============ 我的情绪报告 + 分享卡片 ============
+    function openMyReport() {
+      stableFetch(API_BASE + '/api/my-report?fingerprint=' + encodeURIComponent(userFingerprint))
+        .then(function(r) { drawReportCard(r || {}); })
+        .catch(function() { drawReportCard({}); });
+      document.getElementById('report-modal-card').classList.add('active');
+      document.body.classList.add('modal-open');
+    }
+    function closeMyReport() {
+      document.getElementById('report-modal-card').classList.remove('active');
+      document.body.classList.remove('modal-open');
+    }
+    function drawReportCard(r) {
+      var canvas = document.getElementById('report-canvas');
+      if (!canvas) return;
+      var ctx = canvas.getContext('2d');
+      var W = canvas.width, H = canvas.height;
+      var g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, '#0f0c29'); g.addColorStop(0.5, '#16213e'); g.addColorStop(1, '#0f3460');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fb923c'; ctx.font = 'bold 46px sans-serif';
+      ctx.fillText('我的情绪报告', W / 2, 92);
+      ctx.fillStyle = '#94a3b8'; ctx.font = '24px sans-serif';
+      ctx.fillText('Your Feeling · 匿名心声', W / 2, 132);
+      var id = myIdentity();
+      ctx.font = '64px sans-serif'; ctx.fillText(id.emoji, W / 2, 232);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 32px sans-serif'; ctx.fillText(id.name, W / 2, 290);
+      function stat(label, val, y) {
+        ctx.fillStyle = '#fdba74'; ctx.font = 'bold 66px sans-serif'; ctx.fillText(String(val), W / 2, y);
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '24px sans-serif'; ctx.fillText(label, W / 2, y + 38);
+      }
+      stat('连续打卡 (天)', r.streak || 0, 400);
+      stat('累计打卡 (天)', r.checkins || 0, 524);
+      stat('发布心声 (条)', r.posts || 0, 648);
+      if (r.moods && r.moods.length) {
+        var mi = weatherMoodInfo(r.moods[0].mood);
+        ctx.fillStyle = '#e2e8f0'; ctx.font = '26px sans-serif';
+        ctx.fillText('最常打卡心情：' + mi.emoji + ' ' + mi.label, W / 2, 728);
+      }
+      ctx.fillStyle = '#64748b'; ctx.font = '22px sans-serif';
+      ctx.fillText('每一种情绪，都被看见 🌿', W / 2, 775);
+    }
+    function downloadReportCard() {
+      var canvas = document.getElementById('report-canvas');
+      if (!canvas) return;
+      try {
+        var a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = 'my-feeling-report.png';
+        document.body.appendChild(a); a.click(); a.remove();
+        showToast('已保存，去分享吧 🌿', 'success');
+      } catch (e) { showToast('保存失败', 'error'); }
+    }
+
+    // 帖子分享卡片：把一条心声生成竖版图片
+    function sharePostCard(postId) {
+      var el = document.querySelector('#post-' + postId + ' > .post-content');
+      var text = el ? (el.textContent || '') : '';
+      if (!text) { showToast('内容为空', 'error'); return; }
+      var canvas = document.createElement('canvas');
+      canvas.width = 640; canvas.height = 800;
+      var ctx = canvas.getContext('2d');
+      var g = ctx.createLinearGradient(0, 0, 640, 800);
+      g.addColorStop(0, '#1a1a2e'); g.addColorStop(1, '#0f3460');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 640, 800);
+      ctx.fillStyle = '#fb923c'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('❤ Your Feeling', 48, 70);
+      // 正文自动换行
+      ctx.fillStyle = '#f1f5f9'; ctx.font = '30px sans-serif';
+      var maxW = 544, x = 48, y = 150, lineH = 46, lines = 0, line = '';
+      var chars = text.replace(/\s+/g, ' ').slice(0, 360).split('');
+      for (var i = 0; i < chars.length && lines < 13; i++) {
+        var test = line + chars[i];
+        if (ctx.measureText(test).width > maxW) {
+          ctx.fillText(line, x, y); y += lineH; lines++; line = chars[i];
+        } else line = test;
+      }
+      if (line && lines < 13) ctx.fillText(line, x, y);
+      ctx.fillStyle = '#64748b'; ctx.font = '22px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('匿名分享你的心声 · yourfeeling', 320, 760);
+      try {
+        var a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = 'feeling-' + postId + '.png';
+        document.body.appendChild(a); a.click(); a.remove();
+        showToast('已生成分享图 🌿', 'success');
+      } catch (e) { showToast('生成失败', 'error'); }
     }
 
     // ============ 本周回顾 ============
